@@ -1,0 +1,209 @@
+:root {
+  color: #1a1d23;
+  background:
+    radial-gradient(circle at top left, #d8e7ff 0%, transparent 40%),
+    radial-gradient(circle at bottom right, #dff5e8 0%, transparent 35%),
+    linear-gradient(180deg, #f4f7fb 0%, #e9eef5 100%);
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  line-height: 1.45;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+}
+
+a {
+  color: #1c5d99;
+}
+
+.home {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+
+.home-hero {
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: #5b6472;
+}
+
+.home h1 {
+  margin: 0 0 12px;
+  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  letter-spacing: -0.04em;
+}
+
+.lede {
+  margin: 0 0 20px;
+  max-width: 38rem;
+  color: #3d4654;
+  font-size: 1.05rem;
+}
+
+.create-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.create-form input {
+  flex: 1 1 240px;
+  min-width: 200px;
+  border: 1px solid #c9d2de;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.create-form button,
+.ghost {
+  border: 1px solid #c9d2de;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font: inherit;
+  cursor: pointer;
+  background: #1c5d99;
+  color: white;
+}
+
+.ghost {
+  background: transparent;
+  color: #1a1d23;
+}
+
+.ghost.danger {
+  color: #b42318;
+  border-color: #f0c2bd;
+}
+
+.board-list {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 10px 30px rgba(28, 40, 60, 0.06);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.board-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #e6ebf2;
+}
+
+.board-list li:first-of-type {
+  border-top: none;
+}
+
+.board-list a {
+  display: block;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.board-list small,
+.muted {
+  color: #667085;
+}
+
+.error-text,
+.centered.error {
+  color: #b42318;
+}
+
+.centered {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font-size: 1.05rem;
+}
+
+.board-shell,
+.board-canvas {
+  position: fixed;
+  inset: 0;
+}
+
+.board-toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(8px);
+  font-family: system-ui, sans-serif;
+  pointer-events: auto;
+}
+
+/* Keep tldraw top UI below the custom toolbar */
+.board-canvas .tlui-layout__top {
+  padding-top: 56px;
+}
+
+.board-canvas {
+  z-index: 1;
+}
+
+.banner {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  background: #fff4e5;
+  border: 1px solid #f5c26b;
+  color: #7a4d00;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
