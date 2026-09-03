@@ -46,6 +46,10 @@ export function makeOrLoadRoom(roomId: string): TLSocketRoom {
   const room = new TLSocketRoom({
     schema: boardSchema,
     storage,
+    log: {
+      warn: (...args: unknown[]) => console.warn('[room]', roomId, ...args),
+      error: (...args: unknown[]) => console.error('[room]', roomId, ...args),
+    },
     onSessionRemoved(_room, args) {
       console.log('client disconnected', args.sessionId, roomId)
       if (args.numSessionsRemaining === 0) {
