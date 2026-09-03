@@ -213,3 +213,9 @@ a {
   border-radius: 8px;
   font-size: 13px;
 }
+
+.banner .ghost {
+  margin-left: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+}

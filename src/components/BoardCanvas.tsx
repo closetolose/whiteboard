@@ -41,14 +41,29 @@ export function BoardCanvas({ boardId, boardName }: BoardCanvasProps) {
   if (store.status === 'error') {
     return (
       <div className="centered error">
-        Ошибка синхронизации: {store.error.message}
+        <p>Ошибка синхронизации: {store.error.message}</p>
+        <p className="muted">
+          <button type="button" className="ghost" onClick={() => window.location.reload()}>
+            Обновить страницу
+          </button>
+        </p>
       </div>
     )
   }
 
+  const offline = store.connectionStatus === 'offline'
+
   return (
     <BoardErrorBoundary>
       <div className="board-shell">
+        {offline ? (
+          <div className="banner">
+            Соединение с сервером потеряно.{' '}
+            <button type="button" className="ghost" onClick={() => window.location.reload()}>
+              Обновить
+            </button>
+          </div>
+        ) : null}
         <BoardToolbar editor={editor} boardName={boardName} shareUrl={shareUrl} />
         <div className="board-canvas">
           <Tldraw

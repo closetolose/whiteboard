@@ -162,6 +162,13 @@ async function handleConnect(ws: WebSocket, url: URL, roomId: string) {
     return
   }
 
+  ws.on('close', (code, reason) => {
+    console.log('ws closed', { roomId, sessionId, code, reason: reason.toString() })
+  })
+  ws.on('error', (error) => {
+    console.error('ws error', { roomId, sessionId, error })
+  })
+
   ws.off('message', collectMessagesListener)
   for (const message of caughtMessages) {
     ws.emit('message', message)
