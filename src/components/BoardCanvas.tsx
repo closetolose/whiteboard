@@ -79,6 +79,7 @@ function SyncedBoard({ boardId, boardName }: SyncedBoardProps) {
       />
       <div className="board-canvas">
         <Tldraw
+          licenseKey={import.meta.env.VITE_TLDRAW_LICENSE_KEY}
           store={store.store}
           shapeUtils={customShapeUtils}
           components={components}

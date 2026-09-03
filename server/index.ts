@@ -21,6 +21,9 @@ const PORT = Number(process.env.PORT || 3001)
 const isProd = process.env.NODE_ENV === 'production'
 
 const app = express()
+if (isProd) {
+  app.set('trust proxy', 1)
+}
 app.use(
   cors({
     origin: true,
