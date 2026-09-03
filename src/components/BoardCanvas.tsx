@@ -1,13 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useSync } from '@tldraw/sync'
-import {
-  Tldraw,
-  defaultBindingUtils,
-  defaultShapeUtils,
-  type Editor,
-} from 'tldraw'
+import { Tldraw, type Editor } from 'tldraw'
 import 'tldraw/tldraw.css'
+import { boardSchema } from '../../shared/schema.ts'
 import { BoardToolbar } from './BoardToolbar'
+import { BoardErrorBoundary } from './BoardErrorBoundary'
 import { ConditionalStylePanel } from './ConditionalStylePanel'
 import { multiplayerAssets } from '../lib/assets'
 import { getOrCreateUser } from '../lib/user'
@@ -21,11 +18,6 @@ type BoardCanvasProps = {
 export function BoardCanvas({ boardId, boardName }: BoardCanvasProps) {
   const [editor, setEditor] = useState<Editor | null>(null)
 
-  const shapeUtils = useMemo(
-    () => [...defaultShapeUtils, ...customShapeUtils],
-    [],
-  )
-
   const components = useMemo(
     () => ({
       StylePanel: ConditionalStylePanel,
@@ -36,8 +28,8 @@ export function BoardCanvas({ boardId, boardName }: BoardCanvasProps) {
   const store = useSync({
     uri: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/connect/${boardId}`,
     assets: multiplayerAssets,
-    shapeUtils,
-    bindingUtils: defaultBindingUtils,
+    schema: boardSchema,
+    shapeUtils: customShapeUtils,
   })
 
   const shareUrl = `${window.location.origin}/board/${boardId}`
@@ -55,24 +47,26 @@ export function BoardCanvas({ boardId, boardName }: BoardCanvasProps) {
   }
 
   return (
-    <div className="board-shell">
-      <BoardToolbar editor={editor} boardName={boardName} shareUrl={shareUrl} />
-      <div className="board-canvas">
-        <Tldraw
-          store={store.store}
-          shapeUtils={customShapeUtils}
-          components={components}
-          onMount={(nextEditor) => {
-            const user = getOrCreateUser()
-            nextEditor.user.updateUserPreferences({
-              id: user.id,
-              name: user.name,
-              color: user.color,
-            })
-            setEditor(nextEditor)
-          }}
-        />
+    <BoardErrorBoundary>
+      <div className="board-shell">
+        <BoardToolbar editor={editor} boardName={boardName} shareUrl={shareUrl} />
+        <div className="board-canvas">
+          <Tldraw
+            store={store.store}
+            shapeUtils={customShapeUtils}
+            components={components}
+            onMount={(nextEditor) => {
+              const user = getOrCreateUser()
+              nextEditor.user.updateUserPreferences({
+                id: user.id,
+                name: user.name,
+                color: user.color,
+              })
+              setEditor(nextEditor)
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </BoardErrorBoundary>
   )
 }

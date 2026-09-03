@@ -1,18 +1,8 @@
-import { useEditor, useValue } from '@tldraw/editor'
-import { DefaultStylePanel, type TLUiStylePanelProps } from 'tldraw'
+import { useRelevantStyles, DefaultStylePanel, type TLUiStylePanelProps } from 'tldraw'
 
-/** Hide style panel until a shape is selected or a drawing tool is active. */
+/** Hide style panel until tldraw has relevant styles (selection or draw tool). */
 export function ConditionalStylePanel(props: TLUiStylePanelProps) {
-  const editor = useEditor()
-  const show = useValue(
-    'stylePanelVisible',
-    () => {
-      if (editor.getSelectedShapeIds().length > 0) return true
-      return Boolean(editor.root.getCurrent()?.shapeType)
-    },
-    [editor],
-  )
-
-  if (!show) return null
-  return <DefaultStylePanel {...props} />
+  const styles = useRelevantStyles()
+  if (!styles) return null
+  return <DefaultStylePanel {...props} styles={styles} />
 }
