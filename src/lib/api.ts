@@ -32,7 +32,7 @@ export function listBoards() {
 }
 
 export function getBoard(id: string) {
-  return request<BoardMeta>(`/api/boards/${id}`)
+  return request<BoardMeta>(`/api/boards/${id}`, { cache: 'no-store' })
 }
 
 export function createBoard(name?: string) {
