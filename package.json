@@ -12,6 +12,7 @@
     "build": "tsc -b && vite build",
     "start": "tsx server/index.ts",
     "hash-password": "node scripts/hash-admin-password.mjs",
+    "reset-rooms": "node scripts/reset-rooms.mjs",
     "preview": "vite preview",
     "lint": "oxlint"
   },

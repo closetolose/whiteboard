@@ -2,6 +2,7 @@ import { useMemo, useReducer, useRef } from 'react'
 import { useSync } from '@tldraw/sync'
 import { Tldraw, type Editor } from 'tldraw'
 import 'tldraw/tldraw.css'
+import { boardSchema } from '../../shared/schema.ts'
 import { BoardToolbar } from './BoardToolbar'
 import { BoardErrorBoundary } from './BoardErrorBoundary'
 import { ConditionalStylePanel } from './ConditionalStylePanel'
@@ -35,6 +36,7 @@ function SyncedBoard({ boardId, boardName }: SyncedBoardProps) {
   const store = useSync({
     uri: syncUri,
     assets: multiplayerAssets,
+    schema: boardSchema,
     shapeUtils: customShapeUtils,
   })
 
