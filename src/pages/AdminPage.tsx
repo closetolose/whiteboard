@@ -4,16 +4,18 @@ import {
   createBoard,
   deleteBoard,
   listBoards,
+  logoutAdmin,
   type BoardMeta,
 } from '../lib/api'
 
-export function HomePage() {
+export function AdminPage() {
   const navigate = useNavigate()
   const [boards, setBoards] = useState<BoardMeta[]>([])
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   async function refresh() {
     setLoading(true)
@@ -37,6 +39,8 @@ export function HomePage() {
     setError(null)
     try {
       const board = await createBoard(name || undefined)
+      setName('')
+      await refresh()
       navigate(`/board/${board.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -45,7 +49,7 @@ export function HomePage() {
   }
 
   async function onDelete(id: string) {
-    if (!confirm('Удалить доску из списка?')) return
+    if (!confirm('Удалить доску?')) return
     try {
       await deleteBoard(id)
       setBoards((prev) => prev.filter((board) => board.id !== id))
@@ -54,15 +58,28 @@ export function HomePage() {
     }
   }
 
+  async function onLogout() {
+    await logoutAdmin()
+    navigate('/admin/login', { replace: true })
+  }
+
+  async function copyLink(id: string) {
+    const url = `${window.location.origin}/board/${id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 1500)
+    } catch {
+      window.prompt('Скопируйте ссылку:', url)
+    }
+  }
+
   return (
     <div className="home">
       <header className="home-hero">
-        <p className="eyebrow">Локальная доска для занятий</p>
-        <h1>Whiteboard</h1>
-        <p className="lede">
-          Рисуйте, вставляйте картинки, пишите код и запускайте Python. Доступ по
-          ссылке — без регистрации.
-        </p>
+        <p className="eyebrow">Админка</p>
+        <h1>Доски</h1>
+        <p className="lede">Создавайте доски и отправляйте ученикам ссылку или ID.</p>
         <form className="create-form" onSubmit={onCreate}>
           <input
             value={name}
@@ -72,13 +89,19 @@ export function HomePage() {
           <button type="submit" disabled={creating}>
             {creating ? 'Создаём…' : 'Создать доску'}
           </button>
+          <button type="button" className="ghost" onClick={() => void onLogout()}>
+            Выйти
+          </button>
         </form>
         {error ? <p className="error-text">{error}</p> : null}
+        <p className="muted" style={{ marginTop: 12 }}>
+          <Link to="/">← На главную</Link>
+        </p>
       </header>
 
       <section className="board-list">
         <div className="section-head">
-          <h2>Ваши доски</h2>
+          <h2>Все доски</h2>
           <button type="button" className="ghost" onClick={() => void refresh()}>
             Обновить
           </button>
@@ -93,12 +116,22 @@ export function HomePage() {
               <div>
                 <Link to={`/board/${board.id}`}>{board.name}</Link>
                 <small>
-                  обновлено {new Date(board.updated_at).toLocaleString('ru-RU')}
+                  {board.id} · обновлено{' '}
+                  {new Date(board.updated_at).toLocaleString('ru-RU')}
                 </small>
               </div>
-              <button type="button" className="ghost danger" onClick={() => void onDelete(board.id)}>
-                Удалить
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="ghost" onClick={() => void copyLink(board.id)}>
+                  {copiedId === board.id ? 'Скопировано' : 'Ссылка'}
+                </button>
+                <button
+                  type="button"
+                  className="ghost danger"
+                  onClick={() => void onDelete(board.id)}
+                >
+                  Удалить
+                </button>
+              </div>
             </li>
           ))}
         </ul>

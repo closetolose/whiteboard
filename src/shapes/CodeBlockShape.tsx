@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import {
   BaseBoxShapeUtil,
   HTMLContainer,
@@ -8,6 +9,7 @@ import {
   type TLShape,
 } from 'tldraw'
 import { CodeEditor } from '../components/CodeEditor'
+import { useDebouncedCallback, useFlushOnBlur } from '../lib/debounce'
 import { CODE_BLOCK_TYPE } from '../../shared/schema'
 
 export type CodeBlockShape = TLShape<typeof CODE_BLOCK_TYPE>
@@ -46,12 +48,40 @@ export class CodeBlockShapeUtil extends BaseBoxShapeUtil<CodeBlockShape> {
 function CodeBlockComponent({ shape }: { shape: CodeBlockShape }) {
   const editor = useEditor()
   const isEditing = useIsEditing(shape.id)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [draftCode, setDraftCode] = useState(shape.props.code)
+  const draftCodeRef = useRef(draftCode)
+  draftCodeRef.current = draftCode
   const language =
     shape.props.language === 'python'
       ? 'python'
       : shape.props.language === 'javascript'
         ? 'javascript'
         : 'text'
+
+  useEffect(() => {
+    if (!isEditing) setDraftCode(shape.props.code)
+  }, [isEditing, shape.props.code, shape.id])
+
+  const persistCode = useDebouncedCallback((code: string) => {
+    editor.updateShape({
+      id: shape.id,
+      type: CODE_BLOCK_TYPE,
+      props: { code },
+    })
+  }, 250)
+
+  useFlushOnBlur(
+    () => {
+      editor.updateShape({
+        id: shape.id,
+        type: CODE_BLOCK_TYPE,
+        props: { code: draftCodeRef.current },
+      })
+    },
+    containerRef,
+    isEditing,
+  )
 
   return (
     <HTMLContainer
@@ -62,6 +92,7 @@ function CodeBlockComponent({ shape }: { shape: CodeBlockShape }) {
       }}
     >
       <div
+        ref={containerRef}
         style={{
           width: '100%',
           height: '100%',
@@ -101,15 +132,12 @@ function CodeBlockComponent({ shape }: { shape: CodeBlockShape }) {
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <CodeEditor
-            value={shape.props.code}
+            value={draftCode}
             language={language}
             readOnly={!isEditing}
             onChange={(code) => {
-              editor.updateShape({
-                id: shape.id,
-                type: CODE_BLOCK_TYPE,
-                props: { code },
-              })
+              setDraftCode(code)
+              persistCode(code)
             }}
           />
         </div>

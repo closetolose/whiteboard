@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import {
   BaseBoxShapeUtil,
   HTMLContainer,
@@ -10,6 +10,7 @@ import {
 } from 'tldraw'
 import { CodeEditor } from '../components/CodeEditor'
 import { runPython, stopPython } from '../lib/pyodide'
+import { useDebouncedCallback, useFlushOnBlur } from '../lib/debounce'
 import { PYTHON_BLOCK_TYPE } from '../../shared/schema'
 
 export type PythonBlockShape = TLShape<typeof PYTHON_BLOCK_TYPE>
@@ -49,11 +50,39 @@ export class PythonBlockShapeUtil extends BaseBoxShapeUtil<PythonBlockShape> {
 function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
   const editor = useEditor()
   const isEditing = useIsEditing(shape.id)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const [running, setRunning] = useState(false)
   const [loadingHint, setLoadingHint] = useState('')
   const [liveOutput, setLiveOutput] = useState<string | null>(null)
+  const [draftCode, setDraftCode] = useState(shape.props.code)
+  const draftCodeRef = useRef(draftCode)
+  draftCodeRef.current = draftCode
   const latestOutputRef = useRef('')
   const shapeSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!isEditing) setDraftCode(shape.props.code)
+  }, [isEditing, shape.props.code, shape.id])
+
+  const persistCode = useDebouncedCallback((code: string) => {
+    editor.updateShape({
+      id: shape.id,
+      type: PYTHON_BLOCK_TYPE,
+      props: { code },
+    })
+  }, 250)
+
+  useFlushOnBlur(
+    () => {
+      editor.updateShape({
+        id: shape.id,
+        type: PYTHON_BLOCK_TYPE,
+        props: { code: draftCodeRef.current },
+      })
+    },
+    containerRef,
+    isEditing,
+  )
 
   function writeOutput(output: string, syncShape = false) {
     latestOutputRef.current = output
@@ -87,7 +116,7 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
     setLoadingHint('Загрузка Pyodide…')
     writeOutput('', true)
     try {
-      const output = await runPython(shape.props.code, {
+      const output = await runPython(draftCodeRef.current, {
         onStatus: setLoadingHint,
         onOutput: (next) => writeOutput(next, false),
       })
@@ -119,6 +148,7 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
       }}
     >
       <div
+        ref={containerRef}
         style={{
           width: '100%',
           height: '100%',
@@ -194,15 +224,12 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <CodeEditor
-            value={shape.props.code}
+            value={draftCode}
             language="python"
             readOnly={!isEditing || running}
             onChange={(code) => {
-              editor.updateShape({
-                id: shape.id,
-                type: PYTHON_BLOCK_TYPE,
-                props: { code },
-              })
+              setDraftCode(code)
+              persistCode(code)
             }}
           />
         </div>

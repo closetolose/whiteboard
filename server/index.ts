@@ -5,6 +5,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import type { RawData, WebSocket } from 'ws'
 import { WebSocketServer } from 'ws'
+import { installAuth, requireAdmin } from './auth.ts'
 import { loadAsset, storeAsset } from './assets.ts'
 import {
   createBoard,
@@ -19,21 +20,26 @@ const PORT = Number(process.env.PORT || 3001)
 const isProd = process.env.NODE_ENV === 'production'
 
 const app = express()
-app.use(cors({ origin: true }))
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+)
 app.use(express.json({ limit: '2mb' }))
+installAuth(app)
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.get('/api/boards', (_req, res) => {
+app.get('/api/boards', requireAdmin, (_req, res) => {
   res.json(listBoards())
 })
 
-app.post('/api/boards', (req, res) => {
+app.post('/api/boards', requireAdmin, (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name : undefined
   const board = createBoard(name)
-  // Warm up room storage so the board exists on disk immediately
   makeOrLoadRoom(board.id)
   res.status(201).json(board)
 })
@@ -47,7 +53,7 @@ app.get('/api/boards/:id', (req, res) => {
   res.json(board)
 })
 
-app.patch('/api/boards/:id', (req, res) => {
+app.patch('/api/boards/:id', requireAdmin, (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name : ''
   if (!name.trim()) {
     res.status(400).json({ error: 'Name is required' })
@@ -61,7 +67,7 @@ app.patch('/api/boards/:id', (req, res) => {
   res.json(board)
 })
 
-app.delete('/api/boards/:id', (req, res) => {
+app.delete('/api/boards/:id', requireAdmin, (req, res) => {
   const ok = deleteBoard(req.params.id)
   if (!ok) {
     res.status(404).json({ error: 'Board not found' })
@@ -134,10 +140,9 @@ async function handleConnect(ws: WebSocket, url: URL, roomId: string) {
     return
   }
 
-  // Ensure board metadata exists for direct /board/:id links
   if (!getBoard(roomId)) {
-    // Allow connecting to unknown rooms without creating metadata spam —
-    // only rooms created via API get listed.
+    ws.close(1008, 'Board not found')
+    return
   }
 
   const caughtMessages: RawData[] = []

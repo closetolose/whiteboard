@@ -22,6 +22,7 @@ export function CodeEditor({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
+  const focusedRef = useRef(false)
   onChangeRef.current = onChange
 
   useEffect(() => {
@@ -49,6 +50,14 @@ export function CodeEditor({
             if (update.docChanged) {
               onChangeRef.current?.(update.state.doc.toString())
             }
+          }),
+          EditorView.domEventHandlers({
+            focus: () => {
+              focusedRef.current = true
+            },
+            blur: () => {
+              focusedRef.current = false
+            },
           }),
           EditorView.theme({
             '&': {
@@ -79,7 +88,7 @@ export function CodeEditor({
 
   useEffect(() => {
     const view = viewRef.current
-    if (!view) return
+    if (!view || focusedRef.current) return
     const current = view.state.doc.toString()
     if (current !== value) {
       view.dispatch({

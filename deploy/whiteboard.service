@@ -1,0 +1,18 @@
+[Unit]
+Description=Whiteboard collaborative board
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/home/deploy/whiteboard
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=NODE_OPTIONS=--max-old-space-size=384
+EnvironmentFile=/home/deploy/whiteboard/.env
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

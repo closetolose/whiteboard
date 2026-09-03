@@ -20,14 +20,8 @@ export function BoardPage() {
         const meta = await getBoard(boardId!)
         if (!cancelled) setBoard(meta)
       } catch (err) {
-        // Direct link still works via sync room even if metadata missing
         if (!cancelled) {
-          setBoard({
-            id: boardId!,
-            name: 'Доска',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          setBoard(null)
           setError(err instanceof Error ? err.message : String(err))
         }
       } finally {
@@ -49,18 +43,22 @@ export function BoardPage() {
     )
   }
 
-  if (loading || !board) {
+  if (loading) {
     return <div className="centered">Открываем доску…</div>
   }
 
-  return (
-    <>
-      {error ? (
-        <div className="banner">
-          Метаданные доски недоступны, открываем комнату по ссылке.
-        </div>
-      ) : null}
-      <BoardCanvas boardId={boardId} boardName={board.name} />
-    </>
-  )
+  if (!board) {
+    return (
+      <div className="centered">
+        <p>Доска не найдена.</p>
+        <p className="muted">Проверьте ID или ссылку от преподавателя.</p>
+        {error ? <p className="error-text">{error}</p> : null}
+        <p>
+          <Link to="/">На главную</Link>
+        </p>
+      </div>
+    )
+  }
+
+  return <BoardCanvas boardId={boardId} boardName={board.name} />
 }

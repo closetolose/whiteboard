@@ -3,6 +3,9 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
   type MouseEvent,
+  useEffect,
+  useRef,
+  useState,
 } from 'react'
 import {
   BaseBoxShapeUtil,
@@ -13,6 +16,7 @@ import {
   type RecordProps,
   type TLShape,
 } from 'tldraw'
+import { useDebouncedCallback, useFlushOnBlur } from '../lib/debounce'
 import { TABLE_BLOCK_TYPE } from '../../shared/schema'
 
 export type TableBlockShape = TLShape<typeof TABLE_BLOCK_TYPE>
@@ -67,8 +71,16 @@ export class TableBlockShapeUtil extends BaseBoxShapeUtil<TableBlockShape> {
 function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
   const editor = useEditor()
   const isEditing = useIsEditing(shape.id)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const cells = normalizeCells(shape.props.cells)
-  const cols = cells[0]?.length ?? 1
+  const [draftCells, setDraftCells] = useState(cells)
+  const draftCellsRef = useRef(draftCells)
+  draftCellsRef.current = draftCells
+  const cols = draftCells[0]?.length ?? 1
+
+  useEffect(() => {
+    if (!isEditing) setDraftCells(normalizeCells(shape.props.cells))
+  }, [isEditing, shape.props.cells, shape.id])
 
   function updateCells(nextCells: string[][]) {
     editor.updateShape({
@@ -78,31 +90,53 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
     })
   }
 
+  const persistCells = useDebouncedCallback((nextCells: string[][]) => {
+    updateCells(nextCells)
+  }, 250)
+
+  useFlushOnBlur(
+    () => {
+      updateCells(draftCellsRef.current)
+    },
+    containerRef,
+    isEditing,
+  )
+
   function setCell(row: number, col: number, value: string) {
-    const next = cells.map((r) => [...r])
+    const next = draftCells.map((r) => [...r])
     if (!next[row]) return
     next[row]![col] = value
-    updateCells(next)
+    const normalized = normalizeCells(next)
+    setDraftCells(normalized)
+    persistCells(normalized)
   }
 
   function addRow() {
-    updateCells([...cells, Array.from({ length: cols }, () => '')])
+    const next = [...draftCells, Array.from({ length: cols }, () => '')]
+    setDraftCells(next)
+    updateCells(next)
   }
 
   function addColumn() {
-    updateCells(cells.map((row) => [...row, '']))
+    const next = draftCells.map((row) => [...row, ''])
+    setDraftCells(next)
+    updateCells(next)
   }
 
   function removeLastRow(event: MouseEvent) {
     event.stopPropagation()
-    if (cells.length <= 1) return
-    updateCells(cells.slice(0, -1))
+    if (draftCells.length <= 1) return
+    const next = draftCells.slice(0, -1)
+    setDraftCells(next)
+    updateCells(next)
   }
 
   function removeLastColumn(event: MouseEvent) {
     event.stopPropagation()
     if (cols <= 1) return
-    updateCells(cells.map((row) => row.slice(0, -1)))
+    const next = draftCells.map((row) => row.slice(0, -1))
+    setDraftCells(next)
+    updateCells(next)
   }
 
   function onCellKeyDown(
@@ -117,7 +151,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
     let nextCol = col
 
     if (event.key === 'Enter') {
-      nextRow = Math.min(cells.length - 1, row + (event.shiftKey ? -1 : 1))
+      nextRow = Math.min(draftCells.length - 1, row + (event.shiftKey ? -1 : 1))
     } else if (event.shiftKey) {
       nextCol = col - 1
       if (nextCol < 0) {
@@ -128,7 +162,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
       nextCol = col + 1
       if (nextCol >= cols) {
         nextCol = 0
-        nextRow = Math.min(cells.length - 1, row + 1)
+        nextRow = Math.min(draftCells.length - 1, row + 1)
       }
     }
 
@@ -149,6 +183,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
       }}
     >
       <div
+        ref={containerRef}
         style={{
           width: '100%',
           height: '100%',
@@ -184,7 +219,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
           }}
         >
           <span>
-            Таблица · {cells.length}×{cols}
+            Таблица · {draftCells.length}×{cols}
           </span>
           <span style={{ opacity: 0.7 }}>
             {isEditing ? 'редактирование' : 'двойной клик'}
@@ -201,7 +236,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
             }}
           >
             <tbody>
-              {cells.map((row, rowIndex) => (
+              {draftCells.map((row, rowIndex) => (
                 <tr key={rowIndex}>
                   {row.map((value, colIndex) => {
                     const isHeader = rowIndex === 0

@@ -182,6 +182,12 @@ a {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(8px);
   font-family: system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.board-toolbar button,
+.board-toolbar a,
+.board-toolbar strong {
   pointer-events: auto;
 }
 

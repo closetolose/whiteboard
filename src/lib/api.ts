@@ -7,6 +7,7 @@ export type BoardMeta = {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
@@ -50,4 +51,19 @@ export function renameBoard(id: string, name: string) {
 
 export function deleteBoard(id: string) {
   return request<void>(`/api/boards/${id}`, { method: 'DELETE' })
+}
+
+export function fetchAdminMe() {
+  return request<{ ok: true }>('/api/admin/me')
+}
+
+export function loginAdmin(password: string) {
+  return request<{ ok: true }>('/api/admin/login', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+export function logoutAdmin() {
+  return request<{ ok: true }>('/api/admin/logout', { method: 'POST' })
 }
