@@ -1,22 +1,15 @@
 # Copy to /etc/nginx/sites-available/whiteboard and symlink to sites-enabled.
-# Replace board.example.ru with your domain.
+# Replace whiteboard.all4tutors.ru with your subdomain.
+#
+# 1. Use this HTTP-only config first:
+#    sudo nginx -t && sudo systemctl reload nginx
+# 2. Then issue TLS:
+#    sudo certbot --nginx -d whiteboard.all4tutors.ru
+# Certbot will add the HTTPS server block and redirect automatically.
 
 server {
     listen 80;
-    server_name board.example.ru;
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name board.example.ru;
-
-    # certbot fills these paths:
-    ssl_certificate /etc/letsencrypt/live/board.example.ru/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/board.example.ru/privkey.pem;
+    server_name whiteboard.all4tutors.ru;
 
     client_max_body_size 50m;
 
