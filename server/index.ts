@@ -152,8 +152,9 @@ async function handleConnect(ws: WebSocket, url: URL, roomId: string) {
   }
   ws.on('message', collectMessagesListener)
 
+  let room
   try {
-    const room = makeOrLoadRoom(roomId)
+    room = makeOrLoadRoom(roomId)
     room.handleSocketConnect({ sessionId, socket: ws })
   } catch (error) {
     console.error('failed to connect session', error)
@@ -162,16 +163,31 @@ async function handleConnect(ws: WebSocket, url: URL, roomId: string) {
     return
   }
 
-  ws.on('close', (code, reason) => {
-    console.log('ws closed', { roomId, sessionId, code, reason: reason.toString() })
-  })
-  ws.on('error', (error) => {
+  // Node `ws` has no addEventListener — route events into tldraw sync manually.
+  const onMessage = (data: RawData) => {
+    room.handleSocketMessage(sessionId, data)
+  }
+  const onClose = (code: number, reason: Buffer) => {
+    console.log('ws closed', {
+      roomId,
+      sessionId,
+      code,
+      reason: reason.toString(),
+    })
+    room.handleSocketClose(sessionId)
+  }
+  const onError = (error: Error) => {
     console.error('ws error', { roomId, sessionId, error })
-  })
+    room.handleSocketError(sessionId)
+  }
 
   ws.off('message', collectMessagesListener)
+  ws.on('message', onMessage)
+  ws.on('close', onClose)
+  ws.on('error', onError)
+
   for (const message of caughtMessages) {
-    ws.emit('message', message)
+    onMessage(message)
   }
 }
 
