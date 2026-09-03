@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto'
 import bcrypt from 'bcryptjs'
 import cookieParser from 'cookie-parser'
 import type { Express, Request, Response, NextFunction } from 'express'
@@ -7,15 +7,23 @@ import rateLimit from 'express-rate-limit'
 const COOKIE_NAME = 'wb_session'
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
+let devSessionSecret: string | null = null
+
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET
-  if (!secret || secret.length < 16) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('SESSION_SECRET must be set (16+ characters) in production')
-    }
-    return 'dev-insecure-session-secret'
+  if (secret && secret.length >= 16) {
+    return secret
   }
-  return secret
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET must be set (16+ characters) in production')
+  }
+  if (!devSessionSecret) {
+    devSessionSecret = randomBytes(32).toString('hex')
+    console.warn(
+      '[auth] SESSION_SECRET not set; using ephemeral dev secret (sessions reset on restart)',
+    )
+  }
+  return devSessionSecret
 }
 
 function isProduction(): boolean {
@@ -75,11 +83,13 @@ async function verifyAdminPassword(password: string): Promise<boolean> {
   }
 
   const plain = process.env.ADMIN_PASSWORD
-  if (plain) {
-    return password === plain
+  if (!plain) {
+    console.error(
+      'Set ADMIN_PASSWORD or ADMIN_PASSWORD_HASH in .env (see deploy/.env.example)',
+    )
+    return false
   }
-
-  return password === 'admin'
+  return password === plain
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {

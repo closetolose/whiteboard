@@ -21,7 +21,12 @@ npm run dev
 
 ### Админка в dev
 
-По умолчанию пароль `admin` (если не задан `ADMIN_PASSWORD_HASH`).
+Скопируйте шаблон и задайте свой пароль локально (файл `.env` в git не попадает):
+
+```bash
+cp .env.example .env
+# задайте ADMIN_PASSWORD и SESSION_SECRET
+```
 
 1. http://localhost:3000/admin/login
 2. Создайте доску

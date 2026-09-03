@@ -1,3 +1,12 @@
+# Secrets and credentials (never commit)
+*.pem
+*.key
+*.p12
+*.crt
+secrets/
+.credentials/
+credentials.json
+
 # Logs
 logs
 *.log
@@ -13,6 +22,7 @@ dist-ssr
 *.local
 .env
 .env.*
+!.env.example
 !deploy/.env.example
 
 # Local board data
