@@ -19,7 +19,8 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "test": "node --import tsx --test tests/*.test.mjs",
-    "test:browser": "node tests/serve-browser.mjs"
+    "test:browser": "node tests/serve-browser.mjs",
+    "test:browser:ai": "node --import tsx tests/serve-ai-browser.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.0",

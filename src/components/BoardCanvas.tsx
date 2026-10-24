@@ -1,9 +1,10 @@
-import { useMemo, useReducer, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useSync } from '@tldraw/sync'
 import { Tldraw, type Editor } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { boardSchema } from '../../shared/schema.ts'
 import { BoardToolbar } from './BoardToolbar'
+import { AiPanel } from './AiPanel'
 import { BoardErrorBoundary } from './BoardErrorBoundary'
 import { ConditionalStylePanel } from './ConditionalStylePanel'
 import { createMultiplayerAssets } from '../lib/assets'
@@ -17,8 +18,8 @@ type SyncedBoardProps = {
 
 /** Isolated sync layer — keeps useSync mounted with stable options. */
 function SyncedBoard({ boardId, boardName }: SyncedBoardProps) {
-  const editorRef = useRef<Editor | null>(null)
-  const [, bumpToolbar] = useReducer((n: number) => n + 1, 0)
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const [aiOpen, setAiOpen] = useState(false)
 
   const syncUri = useMemo(
     () =>
@@ -72,12 +73,15 @@ function SyncedBoard({ boardId, boardName }: SyncedBoardProps) {
   }
 
   return (
-    <div className="board-shell">
+    <div className={`board-shell${aiOpen ? ' ai-open' : ''}`}>
       <BoardToolbar
-        editor={editorRef.current}
+        editor={editor}
         boardName={boardName}
         shareUrl={shareUrl}
+        aiOpen={aiOpen}
+        onToggleAi={() => setAiOpen((previous) => !previous)}
       />
+      <AiPanel editor={editor} boardId={boardId} open={aiOpen} onClose={() => setAiOpen(false)} />
       <div className="board-canvas">
         <Tldraw
           licenseKey={import.meta.env.VITE_TLDRAW_LICENSE_KEY}
@@ -91,8 +95,7 @@ function SyncedBoard({ boardId, boardName }: SyncedBoardProps) {
               name: user.name,
               color: user.color,
             })
-            editorRef.current = nextEditor
-            bumpToolbar()
+            setEditor(nextEditor)
           }}
         />
       </div>

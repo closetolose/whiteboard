@@ -6,9 +6,11 @@ type BoardToolbarProps = {
   editor: Editor | null
   boardName: string
   shareUrl: string
+  aiOpen: boolean
+  onToggleAi: () => void
 }
 
-export function BoardToolbar({ editor, boardName, shareUrl }: BoardToolbarProps) {
+export function BoardToolbar({ editor, boardName, shareUrl, aiOpen, onToggleAi }: BoardToolbarProps) {
   const [copied, setCopied] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -122,6 +124,10 @@ export function BoardToolbar({ editor, boardName, shareUrl }: BoardToolbarProps)
           {action.label}
         </button>
       ))}
+      <button type="button" disabled={disabled} onClick={onToggleAi} aria-expanded={aiOpen}
+        style={{ ...buttonStyle, background: aiOpen ? '#e7f0fa' : buttonStyle.background }}>
+        ИИ-помощник
+      </button>
       <button
         type="button"
         onClick={copyLink}

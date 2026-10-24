@@ -7,6 +7,7 @@ import { existsSync } from 'fs'
 import type { WebSocket } from 'ws'
 import { WebSocketServer } from 'ws'
 import { installAuth, requireAdmin } from './auth.ts'
+import { installAi } from './ai.ts'
 import { AssetError, MAX_ASSET_BYTES, deleteBoardAssets, loadAsset, storeAsset } from './assets.ts'
 import {
   createBoard,
@@ -63,6 +64,8 @@ app.get('/api/boards/:id', (req, res) => {
   }
   res.json(board)
 })
+
+installAi(app, { getBoard })
 
 app.patch('/api/boards/:id', requireAdmin, (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name : ''

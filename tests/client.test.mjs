@@ -5,6 +5,7 @@ import { webcrypto } from 'node:crypto'
 import vm from 'node:vm'
 import ts from 'typescript'
 import * as schema from '../shared/schema.ts'
+import * as aiSchema from '../shared/ai.ts'
 
 async function loadSource(path, dependencies = {}, globals = {}, suffix = '') {
   const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -22,6 +23,32 @@ async function loadSource(path, dependencies = {}, globals = {}, suffix = '') {
   })
   return exports
 }
+
+test('AI cancellation releases the UI even when a transport delays abort; context respects selection', async () => {
+  let networkResolve
+  const ai = await loadSource('src/lib/ai.ts', {
+    tldraw: {}, '../../shared/ai': aiSchema, '../../shared/schema': schema,
+  }, {
+    fetch: () => new Promise((resolve) => { networkResolve = resolve }),
+  })
+  const controller = new AbortController()
+  const result = ai.askAi('test', { message: 'test', history: [], context: '' }, controller.signal)
+  controller.abort()
+  await assert.rejects(result, { name: 'AbortError' })
+  networkResolve({ ok: true, json: async () => ({ text: 'late', actions: [] }) })
+  const selected = { id: 'shape:one', type: 'python-block', props: { code: 'print(42)' } }
+  const editor = {
+    getSelectedShapeIds: () => [selected.id], getShapeAndDescendantIds: (ids) => new Set(ids),
+    getShape: (id) => { assert.equal(id, selected.id); return selected },
+    getCurrentPageShapeIds: () => { throw new Error('Should not include unselected content') },
+    toImageDataUrl: () => { throw new Error('Screenshot was disabled') },
+  }
+  const context = await ai.collectAiContext(editor, 'selection', false, new AbortController().signal)
+  assert.match(context.context, /print\(42\)/)
+  assert.equal(context.image, undefined)
+  editor.getSelectedShapeIds = () => []
+  await assert.rejects(ai.collectAiContext(editor, 'selection', false, new AbortController().signal), /выделите/)
+})
 
 test('UUID polyfill remains nonrecursive on LAN HTTP and sets UUID version/variant', async () => {
   const crypto = { getRandomValues: (bytes) => webcrypto.getRandomValues(bytes) }
