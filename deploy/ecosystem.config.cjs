@@ -11,7 +11,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3000',
-        NODE_OPTIONS: '--max-old-space-size=384',
+        NODE_OPTIONS: '--max-old-space-size=384 --dns-result-order=ipv4first --no-network-family-autoselection',
       },
       max_memory_restart: '400M',
       autorestart: true,

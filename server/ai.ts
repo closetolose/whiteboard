@@ -65,11 +65,23 @@ type ConnectionOptions = AiOptions & { baseUrl: string; model: string }
 
 async function callProvider(options: ConnectionOptions, endpoint: string, body: unknown) {
   options.signal.throwIfAborted()
-  const response = await (options.fetch ?? fetch)(`${options.baseUrl}/${endpoint}`, {
-    method: 'POST', signal: options.signal, redirect: 'error',
-    headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  let response: globalThis.Response
+  try {
+    response = await (options.fetch ?? fetch)(`${options.baseUrl}/${endpoint}`, {
+      method: 'POST', signal: options.signal, redirect: 'error',
+      headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch (error) {
+    if (options.signal.aborted) throw error
+    const code = (error as { cause?: { code?: string } })?.cause?.code
+    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') throw new AiError(502, 'Не удалось найти адрес API. Проверьте API Host / Base URL в админке.')
+    if (code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED') {
+      throw new AiError(502, 'Сервер сайта не смог подключиться к API-сервису. Проверьте адрес и доступ к нему с VPS.')
+    }
+    throw new AiError(502, 'Не удалось связаться с API-сервисом. Попробуйте позже.')
+  }
+  options.signal.throwIfAborted()
   if (!response.ok) {
     // Never forward provider bodies, which can contain credentials or account details.
     await response.body?.cancel()
@@ -79,7 +91,14 @@ async function callProvider(options: ConnectionOptions, endpoint: string, body: 
     if (response.status === 400 || response.status === 422) throw new AiError(502, 'API-сервис отклонил запрос. Проверьте модель и поддержку изображений и инструментов.')
     throw new AiError(502, 'API-сервис временно не отвечает. Попробуйте ещё раз.')
   }
-  return response.json()
+  try {
+    const data = await response.json()
+    options.signal.throwIfAborted()
+    return data
+  } catch (error) {
+    if (options.signal.aborted) throw error
+    throw new AiError(502, 'API-сервис вернул ответ в неподдерживаемом формате.')
+  }
 }
 
 function prepareActions(name: unknown, args: unknown, previous: AiAction[]): AiAction[] {
@@ -110,37 +129,27 @@ async function generateResponsesReply(
     { role: 'user', content },
   ]
   const actions: AiAction[] = []
-  for (let round = 0; round < 3; round++) {
-    options.signal.throwIfAborted()
-    const data = await callProvider(options, 'responses', {
-      model: options.model, instructions: INSTRUCTIONS, input,
-      reasoning: { effort: 'low' }, max_output_tokens: 4000, store: false,
-      include: ['reasoning.encrypted_content'],
-      tools, parallel_tool_calls: false, tool_choice: round === 2 ? 'none' : 'auto',
-    }) as ProviderResponse
-    if (data.status !== 'completed' || !Array.isArray(data.output)) {
-      throw new AiError(502, 'Ответ ИИ не завершён. Попробуйте разбить задачу на несколько запросов.')
-    }
-    const calls = data.output.filter((item) => item.type === 'function_call')
-    if (!calls.length) {
-      const text = data.output.filter((item) => item.type === 'message')
-        .flatMap((item) => item.content ?? [])
-        .map((item) => item.type === 'output_text' ? item.text : item.type === 'refusal' ? item.refusal : '')
-        .filter(Boolean).join('\n').slice(0, 16000)
-      if (!text && !actions.length) throw new AiError(502, 'ИИ вернул пустой ответ. Попробуйте ещё раз.')
-      return { text: text || 'Подготовил объекты. Нажмите «Добавить на доску», чтобы разместить их.', actions }
-    }
-    if (round === 2 || calls.length > MAX_AI_ACTIONS) throw new AiError(502, 'Слишком много действий ИИ. Уточните запрос.')
-    input.push(...data.output)
-    for (const call of calls) {
-      if (typeof call.call_id !== 'string') throw new AiError(502, 'ИИ вернул некорректный вызов инструмента.')
-      const prepared = prepareActions(call.name, call.arguments, actions)
-      actions.push(...prepared)
-      input.push({ type: 'function_call_output', call_id: call.call_id,
-        output: JSON.stringify({ prepared: prepared.length, status: 'awaiting_user_click', added_to_board: false }) })
-    }
+  const data = await callProvider(options, 'responses', {
+    model: options.model, instructions: INSTRUCTIONS, input,
+    reasoning: { effort: 'low' }, max_output_tokens: 4000, store: false, stream: false,
+    tools, parallel_tool_calls: false, tool_choice: 'auto',
+  }) as ProviderResponse
+  if (data.status !== 'completed' || !Array.isArray(data.output)) {
+    throw new AiError(502, 'Ответ ИИ не завершён. Попробуйте разбить задачу на несколько запросов.')
   }
-  throw new AiError(502, 'Не удалось завершить ответ ИИ.')
+  const calls = data.output.filter((item) => item.type === 'function_call')
+  if (calls.length > MAX_AI_ACTIONS) throw new AiError(502, 'Слишком много действий ИИ. Уточните запрос.')
+  for (const call of calls) {
+    if (typeof call.call_id !== 'string') throw new AiError(502, 'ИИ вернул некорректный вызов инструмента.')
+    actions.push(...prepareActions(call.name, call.arguments, actions))
+  }
+  const text = data.output.filter((item) => item.type === 'message')
+    .flatMap((item) => item.content ?? [])
+    .map((item) => item.type === 'output_text' ? item.text : item.type === 'refusal' ? item.refusal : '')
+    .filter(Boolean).join('\n').slice(0, 16000)
+  if (!text && !actions.length) throw new AiError(502, 'ИИ вернул пустой ответ. Попробуйте ещё раз.')
+  // Proposals need only local validation; do not pay and wait for a second model reply.
+  return { text: text || 'Подготовил объекты. Нажмите «Добавить на доску», чтобы разместить их.', actions }
 }
 
 type ChatResponse = {
@@ -163,37 +172,25 @@ async function generateChatReply(request: AiRequest, options: ConnectionOptions)
   ]
   const actions: AiAction[] = []
   const chatTools = tools.map(({ name, description, parameters }) => ({ type: 'function', function: { name, description, parameters } }))
-  for (let round = 0; round < 3; round++) {
-    const data = await callProvider(options, 'chat/completions', {
-      model: options.model, messages, max_tokens: 4000, store: false,
-      // GPT-6 Luna/Sol support Chat Completions tool calls only without reasoning.
-      ...(/(?:^|\/)gpt-6-(luna|sol)$/.test(options.model) ? { reasoning_effort: 'none' } : {}),
-      tools: chatTools, tool_choice: round === 2 ? 'none' : 'auto',
-    }) as ChatResponse
-    const choice = data.choices?.[0]
-    if (!choice?.message || !['stop', 'tool_calls', 'content_filter'].includes(choice.finish_reason)) {
-      throw new AiError(502, 'Ответ ИИ не завершён. Попробуйте разбить задачу на несколько запросов.')
-    }
-    const calls = choice.message.tool_calls ?? []
-    if (!calls.length) {
-      const text = (choice.message.content || choice.message.refusal || '').slice(0, 16000)
-      if (!text && !actions.length) throw new AiError(502, 'ИИ вернул пустой ответ. Попробуйте ещё раз.')
-      return { text: text || 'Подготовил объекты. Нажмите «Добавить на доску», чтобы разместить их.', actions }
-    }
-    if (round === 2 || calls.length > MAX_AI_ACTIONS) throw new AiError(502, 'Слишком много действий ИИ. Уточните запрос.')
-    // Replay only standard fields, never provider-specific reasoning or metadata.
-    messages.push({ role: 'assistant', content: choice.message.content ?? null,
-      tool_calls: calls.map((call) => ({ id: call.id, type: call.type,
-        function: { name: call.function?.name, arguments: call.function?.arguments } })) })
-    for (const call of calls) {
-      if (call.type !== 'function' || typeof call.id !== 'string') throw new AiError(502, 'ИИ вернул некорректный вызов инструмента.')
-      const prepared = prepareActions(call.function?.name, call.function?.arguments, actions)
-      actions.push(...prepared)
-      messages.push({ role: 'tool', tool_call_id: call.id,
-        content: JSON.stringify({ prepared: prepared.length, status: 'awaiting_user_click', added_to_board: false }) })
-    }
+  const data = await callProvider(options, 'chat/completions', {
+    model: options.model, messages, max_tokens: 4000, store: false, stream: false,
+    // GPT-6 Luna/Sol support Chat Completions tool calls only without reasoning.
+    ...(/(?:^|\/)gpt-6-(luna|sol)$/.test(options.model) ? { reasoning_effort: 'none' } : {}),
+    tools: chatTools, tool_choice: 'auto',
+  }) as ChatResponse
+  const choice = data.choices?.[0]
+  if (!choice?.message || !['stop', 'tool_calls', 'content_filter'].includes(choice.finish_reason)) {
+    throw new AiError(502, 'Ответ ИИ не завершён. Попробуйте разбить задачу на несколько запросов.')
   }
-  throw new AiError(502, 'Не удалось завершить ответ ИИ.')
+  const calls = choice.message.tool_calls ?? []
+  if (calls.length > MAX_AI_ACTIONS) throw new AiError(502, 'Слишком много действий ИИ. Уточните запрос.')
+  for (const call of calls) {
+    if (call.type !== 'function' || typeof call.id !== 'string') throw new AiError(502, 'ИИ вернул некорректный вызов инструмента.')
+    actions.push(...prepareActions(call.function?.name, call.function?.arguments, actions))
+  }
+  const text = (choice.message.content || choice.message.refusal || '').slice(0, 16000)
+  if (!text && !actions.length) throw new AiError(502, 'ИИ вернул пустой ответ. Попробуйте ещё раз.')
+  return { text: text || 'Подготовил объекты. Нажмите «Добавить на доску», чтобы разместить их.', actions }
 }
 
 export function installAi(app: Express, dependencies: {
@@ -246,6 +243,7 @@ export function installAi(app: Express, dependencies: {
     res.once('close', cancel)
     // Shorter than nginx's default 60-second upstream timeout.
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(55000)])
+    const started = Date.now()
     try {
       const reply = await generateAiReply(request, {
         ...connection, signal, fetch: dependencies.fetch,
@@ -255,7 +253,9 @@ export function installAi(app: Express, dependencies: {
       res.json(reply)
     } catch (error) {
       if (res.destroyed) return
-      if (signal.aborted) { res.status(504).json({ error: 'ИИ не успел ответить. Попробуйте запрос покороче.' }); return }
+      console.warn('ai request failed', { host: new URL(connection.baseUrl).host, model: connection.model,
+        elapsedMs: Date.now() - started, status: signal.aborted ? 504 : error instanceof AiError ? error.status : 502 })
+      if (signal.aborted) { res.status(504).json({ error: 'API-сервис не ответил за 55 секунд. Проверьте доступность выбранной модели у провайдера.' }); return }
       res.status(error instanceof AiError ? error.status : 502).json({
         error: error instanceof AiError ? error.message : 'Не удалось связаться с API-сервисом. Попробуйте позже.',
       })

@@ -66,21 +66,18 @@ test('Compatible Chat Completions uses configured host, key, exact model and vis
       assert.equal(body.model, 'vendor/custom-model')
       assert.equal(body.max_tokens, 4000)
       assert.equal(body.store, false)
+      assert.equal(body.stream, false)
       assert.equal(body.reasoning_effort, undefined)
       assert.equal(body.tools[0].function.name, 'propose_board_items')
-      if (calls === 1) {
-        assert.equal(body.messages.at(-1).content[1].type, 'image_url')
-        return Response.json({ choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: null,
-          tool_calls: [{ type: 'function', id: 'test-call', function: { name: 'propose_board_items', arguments: JSON.stringify({ items: actions }) } }] } }] })
-      }
-      assert.equal(body.messages.at(-1).role, 'tool')
-      assert.equal(body.messages.at(-1).tool_call_id, 'test-call')
-      assert.equal(JSON.parse(body.messages.at(-1).content).added_to_board, false)
-      return Response.json({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'Подготовил объекты.' } }] })
+      assert.equal(calls, 1, 'A proposal must not wait for another model reply')
+      assert.equal(body.messages.at(-1).content[1].type, 'image_url')
+      return Response.json({ choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: null,
+        tool_calls: [{ type: 'function', id: 'test-call', function: { name: 'propose_board_items', arguments: JSON.stringify({ items: actions }) } }] } }] })
     },
   })
-  assert.deepEqual(result, { text: 'Подготовил объекты.', actions })
-  assert.equal(calls, 2)
+  assert.deepEqual(result.actions, actions)
+  assert.match(result.text, /Добавить на доску/)
+  assert.equal(calls, 1)
 })
 
 test('GPT-6 Luna custom gateway turns reasoning off, and truncated or unsafe tool replies stay rejected', async () => {
@@ -96,6 +93,11 @@ test('GPT-6 Luna custom gateway turns reasoning off, and truncated or unsafe too
   await assert.rejects(generateAiReply(request, { ...options, fetch: async () => Response.json({ choices: [{ finish_reason: 'tool_calls', message: {
     tool_calls: [{ type: 'function', id: 'bad', function: { name: 'run_shell', arguments: '{}' } }],
   } }] }) }), /неподдерживаемое/)
+  await assert.rejects(generateAiReply(request, { ...options, fetch: async () => Response.json({ choices: [{ finish_reason: 'tool_calls', message: {
+    tool_calls: Array.from({ length: 7 }, (_, i) => ({ type: 'function', id: `call-${i}`, function: {
+      name: 'propose_board_items', arguments: JSON.stringify({ items: [{ type: 'text', text: 'x' }] }),
+    } })),
+  } }] }) }), /Слишком много/)
 })
 
 test('Only administrator can read/change AI settings; public status masks key/host and respects key deletion', { timeout: 15000 }, async (t) => {

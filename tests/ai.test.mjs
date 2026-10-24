@@ -47,7 +47,8 @@ test('Responses request uses exact model, bounded output and opt-out storage; pl
     assert.equal(body.model, AI_MODEL)
     assert.equal(body.model, 'gpt-6-luna')
     assert.equal(body.store, false)
-    assert.deepEqual(body.include, ['reasoning.encrypted_content'])
+    assert.equal(body.include, undefined)
+    assert.equal(body.stream, false)
     assert.equal(body.max_output_tokens, 4000)
     assert.equal(body.input.at(-1).content[1].type, 'input_image')
     assert.equal(body.tools[0].strict, true)
@@ -57,39 +58,37 @@ test('Responses request uses exact model, bounded output and opt-out storage; pl
   assert.equal(calls, 1)
 })
 
-test('Tool proposals complete through call_id and stay pending user review', async () => {
+test('Tool proposals are validated in one API call and stay pending user review', async () => {
   const items = [{ type: 'text', text: 'Пример' }, { type: 'python', code: 'print(2)' }, { type: 'table', cells: [['a'], ['b']] }]
   let calls = 0
-  const reply = await generateAiReply(request, options(async (_url, init) => {
-    const body = JSON.parse(init.body)
+  const reply = await generateAiReply(request, options(async () => {
+    assert.equal(++calls, 1, 'A proposal must not wait for another model reply')
     const reasoning = { type: 'reasoning', id: 'rs_test', encrypted_content: 'opaque-test-content', summary: [] }
-    if (++calls === 1) return completed([reasoning, tool(items)])
-    assert.deepEqual(body.input.at(-3), reasoning)
-    const output = body.input.at(-1)
-    assert.equal(output.type, 'function_call_output')
-    assert.equal(output.call_id, 'call_test')
-    assert.equal(JSON.parse(output.output).added_to_board, false)
-    return completed([message('Подготовил три объекта.')])
+    return completed([reasoning, tool(items)])
   }))
-  assert.equal(calls, 2)
+  assert.equal(calls, 1)
   assert.deepEqual(reply.actions, items)
+  assert.match(reply.text, /Добавить на доску/)
   assert.doesNotMatch(JSON.stringify(reply), /opaque-test-content/)
 })
 
-test('Malformed calls, incomplete answers and endless tool loops cannot create unchecked actions', async () => {
+test('Malformed calls, incomplete answers and excessive actions cannot create unchecked objects', async () => {
   await assert.rejects(generateAiReply(request, options(async () => completed([{ ...tool([]), name: 'run_shell' }]))), /неподдерживаемое/)
   await assert.rejects(generateAiReply(request, options(async () => completed([tool([{ type: 'table', cells: [['a'], []] }])]))), /некорректные/)
   await assert.rejects(generateAiReply(request, options(async () => Response.json({ status: 'incomplete', output: [message('partial')] }))), /не завершён/)
   let calls = 0
-  await assert.rejects(generateAiReply(request, options(async (_url, init) => {
+  await assert.rejects(generateAiReply(request, options(async () => {
     calls++
-    if (calls === 3) assert.equal(JSON.parse(init.body).tool_choice, 'none')
-    return completed([tool([{ type: 'text', text: 'x' }])])
+    return completed(Array.from({ length: 7 }, () => tool([{ type: 'text', text: 'x' }])))
   })), /Слишком много/)
-  assert.equal(calls, 3)
+  assert.equal(calls, 1)
+  await assert.rejects(generateAiReply(request, options(async () => completed([
+    tool(Array.from({ length: 4 }, () => ({ type: 'text', text: 'x' }))),
+    tool(Array.from({ length: 3 }, () => ({ type: 'text', text: 'y' }))),
+  ]))), /некорректные/)
 })
 
-test('Provider errors hide raw account details and cancellation stops before another paid call', async () => {
+test('Provider errors hide raw account details and cancellation rejects late answers', async () => {
   for (const status of [401, 403, 404, 429, 500]) {
     await assert.rejects(generateAiReply(request, options(async () => new Response('synthetic-secret-account-details', { status }))), (error) => {
       assert.doesNotMatch(error.message, /synthetic-secret/)
@@ -105,6 +104,32 @@ test('Provider errors hide raw account details and cancellation stops before ano
     return completed([tool([{ type: 'text', text: 'x' }])])
   }), signal: controller.signal }), { name: 'AbortError' })
   assert.equal(calls, 1)
+  const bodyController = new AbortController()
+  await assert.rejects(generateAiReply(request, { ...options(async () => ({
+    ok: true,
+    json: async () => {
+      bodyController.abort()
+      return { status: 'completed', output: [message('late')] }
+    },
+  })), signal: bodyController.signal }), { name: 'AbortError' })
+})
+
+test('Network and invalid-response errors explain the failure without exposing provider details', async () => {
+  for (const [code, expected] of [
+    ['ENOTFOUND', /найти адрес API/], ['EAI_AGAIN', /найти адрес API/],
+    ['UND_ERR_CONNECT_TIMEOUT', /подключиться/], ['ETIMEDOUT', /подключиться/], ['ECONNREFUSED', /подключиться/],
+    ['CERT_HAS_EXPIRED', /связаться/],
+  ]) {
+    await assert.rejects(generateAiReply(request, options(async () => {
+      throw new TypeError('synthetic-secret-account-details', { cause: { code } })
+    })), (error) => {
+      assert.match(error.message, expected)
+      assert.doesNotMatch(error.message, /synthetic-secret/)
+      assert.equal(error.status, 502)
+      return true
+    })
+  }
+  await assert.rejects(generateAiReply(request, options(async () => new Response('synthetic-secret-account-details'))), /неподдерживаемом формате/)
 })
 
 test('Public board AI route handles missing key, unknown boards, limits and client disconnects', { timeout: 15000 }, async (t) => {

@@ -54,9 +54,9 @@ export function AiSettingsForm() {
         <fieldset disabled={!settings || saving}>
           <label htmlFor="ai-base-url">API Host / Base URL</label>
           <input id="ai-base-url" name="baseUrl" type="url" required maxLength={2048} spellCheck={false}
-            value={baseUrl} placeholder="https://tavnik.store/v1" aria-describedby="ai-base-url-hint"
+            value={baseUrl} placeholder="https://taynik.store/v1" aria-describedby="ai-base-url-hint"
             onChange={(event) => { setBaseUrl(event.target.value); changed() }} />
-          <small id="ai-base-url-hint">Например, https://tavnik.store/v1. Указывайте базовый адрес без /chat/completions или /responses.</small>
+          <small id="ai-base-url-hint">Например, https://taynik.store/v1. Указывайте базовый адрес без /chat/completions или /responses.</small>
 
           <label htmlFor="ai-api-key">API Key</label>
           <input id="ai-api-key" name="apiKey" type="password" autoComplete="new-password" maxLength={4096}

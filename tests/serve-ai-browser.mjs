@@ -40,11 +40,6 @@ installAi(mock, {
     if (prompt.includes('долгое ожидание')) {
       return new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }))
     }
-    if (last.type === 'function_call_output' || last.role === 'tool') {
-      const text = 'Подготовил текст, Python-блок и таблицу. Нажмите «Добавить на доску», чтобы разместить их.'
-      return Response.json(chat ? { choices: [{ finish_reason: 'stop', message: { content: text } }] }
-        : { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text }] }] })
-    }
     console.log(`AI mock: protocol=${chat ? 'chat' : 'responses'}, image=${Array.isArray(last.content) && last.content.some((item) => item.type === 'input_image' || item.type === 'image_url')}`)
     const args = JSON.stringify({ items: [
         { type: 'text', text: 'Цикл for повторяет действие для каждого элемента последовательности.' },

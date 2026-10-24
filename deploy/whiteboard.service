@@ -8,7 +8,7 @@ User=deploy
 WorkingDirectory=/home/deploy/whiteboard
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=NODE_OPTIONS=--max-old-space-size=384
+Environment="NODE_OPTIONS=--max-old-space-size=384 --dns-result-order=ipv4first --no-network-family-autoselection"
 EnvironmentFile=/home/deploy/whiteboard/.env
 ExecStart=/usr/bin/node --import tsx server/index.ts
 KillSignal=SIGTERM
