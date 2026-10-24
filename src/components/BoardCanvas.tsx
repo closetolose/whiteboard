@@ -6,7 +6,7 @@ import { boardSchema } from '../../shared/schema.ts'
 import { BoardToolbar } from './BoardToolbar'
 import { BoardErrorBoundary } from './BoardErrorBoundary'
 import { ConditionalStylePanel } from './ConditionalStylePanel'
-import { multiplayerAssets } from '../lib/assets'
+import { createMultiplayerAssets } from '../lib/assets'
 import { getOrCreateUser } from '../lib/user'
 import { customShapeUtils } from '../shapes'
 
@@ -33,9 +33,10 @@ function SyncedBoard({ boardId, boardName }: SyncedBoardProps) {
     [],
   )
 
+  const assets = useMemo(() => createMultiplayerAssets(boardId), [boardId])
   const store = useSync({
     uri: syncUri,
-    assets: multiplayerAssets,
+    assets,
     schema: boardSchema,
     shapeUtils: customShapeUtils,
   })

@@ -59,6 +59,17 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
   draftCodeRef.current = draftCode
   const latestOutputRef = useRef('')
   const shapeSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runController = useRef<AbortController | null>(null)
+  const mounted = useRef(true)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      runController.current?.abort()
+      if (shapeSyncTimer.current !== null) clearTimeout(shapeSyncTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isEditing) setDraftCode(shape.props.code)
@@ -85,6 +96,7 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
   )
 
   function writeOutput(output: string, syncShape = false) {
+    if (!mounted.current || !editor.getShape(shape.id)) return
     latestOutputRef.current = output
     setLiveOutput(output)
     if (!syncShape) {
@@ -115,9 +127,12 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
     setRunning(true)
     setLoadingHint('Загрузка Pyodide…')
     writeOutput('', true)
+    const controller = new AbortController()
+    runController.current = controller
     try {
       const output = await runPython(draftCodeRef.current, {
-        onStatus: setLoadingHint,
+        signal: controller.signal,
+        onStatus: (status) => { if (mounted.current) setLoadingHint(status) },
         onOutput: (next) => writeOutput(next, false),
       })
       writeOutput(output, true)
@@ -125,9 +140,12 @@ function PythonBlockComponent({ shape }: { shape: PythonBlockShape }) {
       const message = error instanceof Error ? error.message : String(error)
       writeOutput(message, true)
     } finally {
-      setRunning(false)
-      setLoadingHint('')
-      setLiveOutput(null)
+      runController.current = null
+      if (mounted.current) {
+        setRunning(false)
+        setLoadingHint('')
+        setLiveOutput(null)
+      }
     }
   }
 

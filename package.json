@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "concurrently -k -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "cross-env PORT=3001 tsx watch server/index.ts",
@@ -14,7 +17,9 @@
     "hash-password": "node scripts/hash-admin-password.mjs",
     "reset-rooms": "node scripts/reset-rooms.mjs",
     "preview": "vite preview",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "test": "node --import tsx --test tests/*.test.mjs",
+    "test:browser": "node tests/serve-browser.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.0",

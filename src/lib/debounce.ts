@@ -1,9 +1,13 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
+
+type DebouncedCallback<A extends unknown[]> = ((...args: A) => void) & {
+  cancel: () => void
+}
 
 export function useDebouncedCallback<A extends unknown[]>(
   callback: (...args: A) => void,
   delayMs: number,
-): (...args: A) => void {
+): DebouncedCallback<A> {
   const callbackRef = useRef(callback)
   callbackRef.current = callback
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -14,15 +18,20 @@ export function useDebouncedCallback<A extends unknown[]>(
     }
   }, [])
 
-  const debounced = useRef((...args: A) => {
+  const debounced = useMemo(() => Object.assign((...args: A) => {
     if (timerRef.current !== null) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       timerRef.current = null
       callbackRef.current(...args)
     }, delayMs)
-  })
+  }, {
+    cancel: () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current)
+      timerRef.current = null
+    },
+  }), [delayMs])
 
-  return debounced.current
+  return debounced
 }
 
 export function useFlushOnBlur(

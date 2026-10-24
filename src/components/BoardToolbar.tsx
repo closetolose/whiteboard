@@ -10,13 +10,14 @@ type BoardToolbarProps = {
 
 export function BoardToolbar({ editor, boardName, shareUrl }: BoardToolbarProps) {
   const [copied, setCopied] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const disabled = !editor
 
   const actions = useMemo(
     () => [
       {
-        label: '+ Python',
+        label: 'Python',
         onClick: () => {
           if (!editor) return
           const center = editor.getViewportPageBounds().center
@@ -28,7 +29,7 @@ export function BoardToolbar({ editor, boardName, shareUrl }: BoardToolbarProps)
         },
       },
       {
-        label: '+ Таблица',
+        label: 'Таблица',
         onClick: () => {
           if (!editor) return
           const center = editor.getViewportPageBounds().center
@@ -40,26 +41,31 @@ export function BoardToolbar({ editor, boardName, shareUrl }: BoardToolbarProps)
         },
       },
       {
-        label: '+ Image',
+        label: 'Изображение',
         onClick: () => {
           if (!editor) return
           const input = document.createElement('input')
           input.type = 'file'
-          input.accept = 'image/*'
+          input.accept = 'image/png,image/jpeg,image/gif,image/webp'
           input.onchange = async () => {
             const file = input.files?.[0]
             if (!file) return
-            await editor.putExternalContent({
-              type: 'files',
-              files: [file],
-              point: editor.getViewportPageBounds().center,
-            })
+            setActionError(null)
+            try {
+              await editor.putExternalContent({
+                type: 'files',
+                files: [file],
+                point: editor.getViewportPageBounds().center,
+              })
+            } catch (error) {
+              setActionError(error instanceof Error ? error.message : 'Не удалось загрузить изображение')
+            }
           }
           input.click()
         },
       },
       {
-        label: 'Export PNG',
+        label: 'Экспорт',
         onClick: async () => {
           if (!editor) return
           const shapeIds = editor.getCurrentPageShapeIds()
@@ -126,6 +132,7 @@ export function BoardToolbar({ editor, boardName, shareUrl }: BoardToolbarProps)
       <a href="/" style={{ ...buttonStyle, textDecoration: 'none', color: 'inherit' }}>
         Домой
       </a>
+      {actionError ? <span role="alert">{actionError}</span> : null}
     </div>
   )
 }

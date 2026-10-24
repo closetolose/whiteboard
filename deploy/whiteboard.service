@@ -10,7 +10,9 @@ Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=NODE_OPTIONS=--max-old-space-size=384
 EnvironmentFile=/home/deploy/whiteboard/.env
-ExecStart=/usr/bin/npm start
+ExecStart=/usr/bin/node --import tsx server/index.ts
+KillSignal=SIGTERM
+TimeoutStopSec=10
 Restart=on-failure
 RestartSec=5
 

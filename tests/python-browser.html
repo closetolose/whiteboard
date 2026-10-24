@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>Python regression checks</title>
+<style>
+  body { font: 16px system-ui; margin: 40px; max-width: 1000px; background: #f5f5f5; color: #17202a }
+  textarea, pre { width: 100%; box-sizing: border-box; padding: 16px; background: white; border: 1px solid #bbb }
+  textarea { height: 200px; font: 15px monospace }
+  button { padding: 10px 16px; margin: 12px 8px 12px 0 }
+</style>
+<h1>Python: проверка изоляции и остановки</h1>
+<p>Тестовая среда с отдельной временной БД. Результаты каждого запуска добавляются ниже.</p>
+<label for="code">Python-код</label>
+<textarea id="code">import time
+def greet():
+    print('hello from def')
+    time.sleep(0.01)
+greet()
+(lambda: print('hello from lambda'))()</textarea>
+<div><button id="run">Run</button><button id="stop">Stop</button><button id="ping">Проверить UI</button></div>
+<p id="status">Готов</p><p id="ping-result">UI: 0</p>
+<pre id="output"></pre>
+<ol id="history"></ol>
+<script type="module">
+  import { runPython, stopPython, isPythonRunning } from '/src/lib/pyodide.ts'
+  const $ = (id) => document.getElementById(id)
+  let pings = 0
+  $('ping').onclick = () => { $('ping-result').textContent = `UI: ${++pings}` }
+  $('stop').onclick = stopPython
+  $('run').onclick = async () => {
+    $('run').disabled = true
+    $('output').textContent = ''
+    try {
+      const output = await runPython($('code').value, {
+        onStatus: (status) => { $('status').textContent = status },
+        onOutput: (output) => { $('output').textContent = output },
+      })
+      $('output').textContent = output
+      const item = document.createElement('li')
+      item.textContent = output.slice(0, 500)
+      $('history').appendChild(item)
+    } catch (error) {
+      $('output').textContent = String(error)
+    } finally {
+      $('run').disabled = false
+      $('status').textContent = isPythonRunning() ? 'Ошибка: занят' : 'Готов'
+    }
+  }
+</script>
+</html>

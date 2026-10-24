@@ -1,6 +1,6 @@
 import { NodeSqliteWrapper, SQLiteSyncStorage, TLSocketRoom } from '@tldraw/sync-core'
 import Database from 'better-sqlite3'
-import { mkdirSync } from 'fs'
+import { mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { boardSchema } from '../shared/schema.ts'
 import { touchBoard } from './boards.ts'
@@ -16,16 +16,27 @@ function sanitizeRoomId(roomId: string): string {
 
 const rooms = new Map<string, TLSocketRoom>()
 const roomCloseTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const roomCleanups = new Map<string, () => void>()
+
+export function closeRoom(roomId: string): void {
+  roomCleanups.get(sanitizeRoomId(roomId))?.()
+}
+
+export function closeAllRooms(): void {
+  for (const cleanup of [...roomCleanups.values()]) cleanup()
+}
+
+export function deleteRoom(roomId: string): void {
+  closeRoom(roomId)
+  const id = sanitizeRoomId(roomId)
+  for (const suffix of ['.db', '.db-wal', '.db-shm']) {
+    rmSync(join(DIR, `${id}${suffix}`), { force: true })
+  }
+}
 
 export function makeOrLoadRoom(roomId: string): TLSocketRoom {
   const boardId = roomId
   roomId = sanitizeRoomId(roomId)
-
-  const pendingClose = roomCloseTimers.get(roomId)
-  if (pendingClose) {
-    clearTimeout(pendingClose)
-    roomCloseTimers.delete(roomId)
-  }
 
   const existing = rooms.get(roomId)
   if (existing && !existing.isClosed()) {
@@ -34,9 +45,11 @@ export function makeOrLoadRoom(roomId: string): TLSocketRoom {
 
   console.log('loading room', roomId)
   const db = new Database(join(DIR, `${roomId}.db`))
+  db.pragma('journal_mode = WAL')
   const sql = new NodeSqliteWrapper(db)
 
   let touchTimer: ReturnType<typeof setTimeout> | null = null
+  let closing = false
   const scheduleTouch = () => {
     if (touchTimer) clearTimeout(touchTimer)
     touchTimer = setTimeout(() => {
@@ -63,16 +76,13 @@ export function makeOrLoadRoom(roomId: string): TLSocketRoom {
     },
     onSessionRemoved(roomRef, args) {
       console.log('client disconnected', args.sessionId, roomId)
-      if (args.numSessionsRemaining > 0) return
-
+      if (closing || args.numSessionsRemaining > 0) return
+      const previous = roomCloseTimers.get(roomId)
+      if (previous) clearTimeout(previous)
       const timer = setTimeout(() => {
         roomCloseTimers.delete(roomId)
         if (roomRef.getNumActiveSessions() > 0) return
-        console.log('closing room', roomId)
-        if (touchTimer) clearTimeout(touchTimer)
-        roomRef.close()
-        db.close()
-        rooms.delete(roomId)
+        closeRoom(roomId)
       }, ROOM_IDLE_MS)
 
       roomCloseTimers.set(roomId, timer)
@@ -80,5 +90,23 @@ export function makeOrLoadRoom(roomId: string): TLSocketRoom {
   })
 
   rooms.set(roomId, room)
+  roomCleanups.set(roomId, () => {
+    if (closing) return
+    closing = true
+    console.log('closing room', roomId)
+    const timer = roomCloseTimers.get(roomId)
+    if (timer) clearTimeout(timer)
+    roomCloseTimers.delete(roomId)
+    if (touchTimer) clearTimeout(touchTimer)
+    room.close()
+    db.close()
+    rooms.delete(roomId)
+    roomCleanups.delete(roomId)
+  })
+  // Also release a room whose first connection failed before creating a session.
+  roomCloseTimers.set(roomId, setTimeout(() => {
+    roomCloseTimers.delete(roomId)
+    if (room.getNumActiveSessions() === 0) closeRoom(roomId)
+  }, ROOM_IDLE_MS))
   return room
 }

@@ -10,14 +10,16 @@ import {
 import {
   BaseBoxShapeUtil,
   HTMLContainer,
-  T,
   useEditor,
   useIsEditing,
   type RecordProps,
   type TLShape,
 } from 'tldraw'
 import { useDebouncedCallback, useFlushOnBlur } from '../lib/debounce'
-import { TABLE_BLOCK_TYPE } from '../../shared/schema'
+import {
+  TABLE_BLOCK_TYPE, tableBlockProps, MAX_TABLE_ROWS, MAX_TABLE_COLUMNS,
+  MAX_TABLE_CELLS, MAX_CELL_CHARS,
+} from '../../shared/schema'
 
 export type TableBlockShape = TLShape<typeof TABLE_BLOCK_TYPE>
 
@@ -31,21 +33,18 @@ function createEmptyGrid(rows: number, cols: number): string[][] {
 
 function normalizeCells(cells: string[][]): string[][] {
   if (!cells.length) return createEmptyGrid(3, 3)
-  const cols = Math.max(1, ...cells.map((row) => row.length))
-  return cells.map((row) => {
-    const next = [...row]
+  const rows = cells.slice(0, MAX_TABLE_ROWS)
+  const cols = Math.min(MAX_TABLE_COLUMNS, Math.max(1, ...rows.map((row) => row.length)))
+  return rows.slice(0, Math.floor(MAX_TABLE_CELLS / cols)).map((row) => {
+    const next = row.slice(0, cols)
     while (next.length < cols) next.push('')
-    return next.slice(0, cols)
+    return next.slice(0, cols).map((cell) => cell.slice(0, MAX_CELL_CHARS))
   })
 }
 
 export class TableBlockShapeUtil extends BaseBoxShapeUtil<TableBlockShape> {
   static override type = TABLE_BLOCK_TYPE
-  static override props: RecordProps<TableBlockShape> = {
-    w: T.number,
-    h: T.number,
-    cells: T.arrayOf(T.arrayOf(T.string)),
-  }
+  static override props: RecordProps<TableBlockShape> = tableBlockProps
 
   getDefaultProps(): TableBlockShape['props'] {
     return {
@@ -82,7 +81,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
     if (!isEditing) setDraftCells(normalizeCells(shape.props.cells))
   }, [isEditing, shape.props.cells, shape.id])
 
-  function updateCells(nextCells: string[][]) {
+  function saveCells(nextCells: string[][]) {
     editor.updateShape({
       id: shape.id,
       type: TABLE_BLOCK_TYPE,
@@ -91,8 +90,13 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
   }
 
   const persistCells = useDebouncedCallback((nextCells: string[][]) => {
-    updateCells(nextCells)
+    saveCells(nextCells)
   }, 250)
+
+  function updateCells(nextCells: string[][]) {
+    persistCells.cancel()
+    saveCells(nextCells)
+  }
 
   useFlushOnBlur(
     () => {
@@ -103,22 +107,27 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
   )
 
   function setCell(row: number, col: number, value: string) {
-    const next = draftCells.map((r) => [...r])
+    const next = draftCellsRef.current.map((r) => [...r])
     if (!next[row]) return
-    next[row]![col] = value
+    next[row]![col] = value.slice(0, MAX_CELL_CHARS)
     const normalized = normalizeCells(next)
     setDraftCells(normalized)
+    draftCellsRef.current = normalized
     persistCells(normalized)
   }
 
   function addRow() {
+    if (draftCells.length >= MAX_TABLE_ROWS || (draftCells.length + 1) * cols > MAX_TABLE_CELLS) return
     const next = [...draftCells, Array.from({ length: cols }, () => '')]
+    draftCellsRef.current = next
     setDraftCells(next)
     updateCells(next)
   }
 
   function addColumn() {
+    if (cols >= MAX_TABLE_COLUMNS || draftCells.length * (cols + 1) > MAX_TABLE_CELLS) return
     const next = draftCells.map((row) => [...row, ''])
+    draftCellsRef.current = next
     setDraftCells(next)
     updateCells(next)
   }
@@ -127,6 +136,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
     event.stopPropagation()
     if (draftCells.length <= 1) return
     const next = draftCells.slice(0, -1)
+    draftCellsRef.current = next
     setDraftCells(next)
     updateCells(next)
   }
@@ -135,6 +145,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
     event.stopPropagation()
     if (cols <= 1) return
     const next = draftCells.map((row) => row.slice(0, -1))
+    draftCellsRef.current = next
     setDraftCells(next)
     updateCells(next)
   }
@@ -254,6 +265,7 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
                           <input
                             data-cell={`${rowIndex}-${colIndex}`}
                             value={value}
+                            maxLength={MAX_CELL_CHARS}
                             onChange={(event: ChangeEvent<HTMLInputElement>) => {
                               setCell(rowIndex, colIndex, event.target.value)
                             }}
@@ -307,10 +319,12 @@ function TableBlockComponent({ shape }: { shape: TableBlockShape }) {
               background: '#f8fafc',
             }}
           >
-            <button type="button" style={miniBtn} onClick={addRow}>
+            <button type="button" style={miniBtn} onClick={addRow}
+              disabled={draftCells.length >= MAX_TABLE_ROWS || (draftCells.length + 1) * cols > MAX_TABLE_CELLS}>
               + строка
             </button>
-            <button type="button" style={miniBtn} onClick={addColumn}>
+            <button type="button" style={miniBtn} onClick={addColumn}
+              disabled={cols >= MAX_TABLE_COLUMNS || draftCells.length * (cols + 1) > MAX_TABLE_CELLS}>
               + столбец
             </button>
             <button type="button" style={miniBtn} onClick={removeLastRow}>

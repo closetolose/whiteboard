@@ -13,13 +13,17 @@ if [[ -z "$DOMAIN" ]]; then
   echo "Usage: bash deploy/setup-vps.sh board.example.ru"
   exit 1
 fi
+if [[ ${#DOMAIN} -gt 253 || ! "$DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ || "$DOMAIN" != *.* || "$DOMAIN" == *..* ]]; then
+  echo 'Pass a hostname such as board.example.ru (without scheme, path or port)'
+  exit 1
+fi
 
 echo "==> Install packages"
 apt-get update
 apt-get install -y curl git nginx certbot python3-certbot-nginx
 
-if ! command -v node >/dev/null; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+if ! command -v node >/dev/null || ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 12) ? 0 : 1)'; then
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt-get install -y nodejs
 fi
 
@@ -49,25 +53,26 @@ sudo -u "$APP_USER" bash -lc "
   fi
   cd '$APP_DIR'
   npm ci --include=dev
-  npm run build
 "
 
 if [[ ! -f "$APP_DIR/.env" ]]; then
   echo "==> Create .env from template"
-  cp "$APP_DIR/deploy/.env.example" "$APP_DIR/.env"
+  install -o "$APP_USER" -g "$APP_USER" -m 600 "$APP_DIR/deploy/.env.example" "$APP_DIR/.env"
   echo "Edit $APP_DIR/.env: set ADMIN_PASSWORD_HASH and SESSION_SECRET"
   echo "  node scripts/hash-admin-password.mjs"
   exit 0
 fi
+sudo -u "$APP_USER" bash -lc "cd '$APP_DIR' && npm run build"
 
 echo "==> nginx"
-sed "s/board.example.ru/$DOMAIN/g" "$APP_DIR/deploy/nginx.conf.example" > /etc/nginx/sites-available/whiteboard
+sed "s/board\\.example\\.ru/$DOMAIN/g" "$APP_DIR/deploy/nginx.conf.example" > /etc/nginx/sites-available/whiteboard
+grep -Fq "server_name $DOMAIN;" /etc/nginx/sites-available/whiteboard
 ln -sf /etc/nginx/sites-available/whiteboard /etc/nginx/sites-enabled/whiteboard
 nginx -t
 systemctl reload nginx
 
 echo "==> TLS"
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m admin@"$DOMAIN" || true
+certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m admin@"$DOMAIN"
 
 echo "==> pm2 (optional)"
 if ! command -v pm2 >/dev/null; then

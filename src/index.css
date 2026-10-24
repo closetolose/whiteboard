@@ -191,9 +191,14 @@ a {
   pointer-events: auto;
 }
 
-/* Keep tldraw top UI below the custom toolbar */
+/* Top-left tldraw menu flush to the top edge */
 .board-canvas .tlui-layout__top {
-  padding-top: 56px;
+  padding-top: 0;
+}
+
+/* Style panel (colors, size) vertically centered on the right */
+.board-canvas .tlui-layout__top__right {
+  justify-content: center;
 }
 
 .board-canvas {

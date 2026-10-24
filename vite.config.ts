@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-const API_TARGET = 'http://localhost:3001'
+const API_TARGET = process.env.API_TARGET || 'http://localhost:3001'
 
 export default defineConfig({
   plugins: [react()],
@@ -12,10 +12,10 @@ export default defineConfig({
     // Allow ngrok / cloudflare tunnel hostnames
     allowedHosts: true,
     proxy: {
-      '/api': API_TARGET,
-      '/uploads': API_TARGET,
+      '/api': { target: API_TARGET, changeOrigin: false },
+      '/uploads': { target: API_TARGET, changeOrigin: false },
       '/connect': {
-        target: 'ws://localhost:3001',
+        target: API_TARGET.replace(/^http/, 'ws'),
         ws: true,
       },
     },

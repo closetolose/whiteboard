@@ -1,22 +1,23 @@
-import { uniqueId, type TLAssetStore } from 'tldraw'
+import type { TLAssetStore } from 'tldraw'
 
-export const multiplayerAssets: TLAssetStore = {
-  async upload(_asset, file) {
-    const objectName = `${uniqueId()}-${file.name}`
-    const url = `/uploads/${encodeURIComponent(objectName)}`
+export function createMultiplayerAssets(boardId: string): TLAssetStore {
+  return {
+    async upload(_asset, file) {
+      const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/assets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file,
+      })
 
-    const response = await fetch(url, {
-      method: 'PUT',
-      body: file,
-    })
+      if (!response.ok) {
+        const result = await response.json().catch(() => null)
+        throw new Error(result?.error || `Failed to upload asset: ${response.statusText}`)
+      }
 
-    if (!response.ok) {
-      throw new Error(`Failed to upload asset: ${response.statusText}`)
-    }
-
-    return { src: url }
-  },
-  resolve(asset) {
-    return asset.props.src
-  },
+      return await response.json() as { src: string }
+    },
+    resolve(asset) {
+      return asset.props.src
+    },
+  }
 }
