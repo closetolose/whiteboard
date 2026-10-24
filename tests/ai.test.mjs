@@ -2,9 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
+import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import express from 'express'
 import { AI_MODEL, parseAiRequest, parseAiActions } from '../shared/ai.ts'
 import { generateAiReply, installAi } from '../server/ai.ts'
+import { createAiSettingsStore } from '../server/aiSettings.ts'
 
 const request = { message: 'Объясни пример', context: 'print(1 + 1)', history: [] }
 const completed = (output) => Response.json({ status: 'completed', output })
@@ -104,15 +108,12 @@ test('Provider errors hide raw account details and cancellation stops before ano
 })
 
 test('Public board AI route handles missing key, unknown boards, limits and client disconnects', { timeout: 15000 }, async (t) => {
-  const oldKey = process.env.OPENAI_API_KEY
+  const aiEnv = { OPENAI_API_KEY: '' }
   const oldLimit = process.env.AI_REQUESTS_PER_HOUR
   t.after(() => {
-    if (oldKey === undefined) delete process.env.OPENAI_API_KEY
-    else process.env.OPENAI_API_KEY = oldKey
     if (oldLimit === undefined) delete process.env.AI_REQUESTS_PER_HOUR
     else process.env.AI_REQUESTS_PER_HOUR = oldLimit
   })
-  delete process.env.OPENAI_API_KEY
   process.env.AI_REQUESTS_PER_HOUR = '5'
   let providerCalls = 0
   let hold = false
@@ -122,6 +123,7 @@ test('Public board AI route handles missing key, unknown boards, limits and clie
   const app = express()
   app.use(express.json({ limit: '2mb' }))
   installAi(app, {
+    settings: createAiSettingsStore({ path: join(tmpdir(), `whiteboard-ai-unused-${randomUUID()}.json`), env: aiEnv }),
     getBoard: (id) => id === 'test-board' && !deleted ? { id, name: 'Test' } : undefined,
     fetch: async (_url, init) => {
       providerCalls++
@@ -145,7 +147,7 @@ test('Public board AI route handles missing key, unknown boards, limits and clie
   assert.deepEqual(await status.json(), { configured: false, model: AI_MODEL })
   assert.equal((await post()).status, 503)
   assert.equal(providerCalls, 0)
-  process.env.OPENAI_API_KEY = 'synthetic-secret-key'
+  aiEnv.OPENAI_API_KEY = 'synthetic-secret-key'
   assert.equal((await post('not-a-board')).status, 404)
   assert.equal(providerCalls, 0)
   assert.equal((await post()).status, 200) // No administrator cookie required.

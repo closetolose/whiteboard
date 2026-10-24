@@ -226,6 +226,18 @@ a {
 }
 
 .ai-open .board-canvas { right: 400px; }
+.ai-settings { background: white; border: 1px solid #dce1e8; border-radius: 12px; padding: 24px; margin-bottom: 24px; scroll-margin-top: 24px; }
+.ai-settings h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.ai-settings > p { margin: 0 0 20px; font-size: 14px; }
+.ai-settings fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.ai-settings label { display: block; margin: 18px 0 6px; font-weight: 600; font-size: 14px; }
+.ai-settings fieldset > label:first-child { margin-top: 0; }
+.ai-settings input:not([type="checkbox"]) { display: block; width: 100%; padding: 10px 12px; border: 1px solid #c9d2de; border-radius: 6px; font: inherit; font-size: 14px; }
+.ai-settings input:focus-visible { outline: 2px solid #1971c2; outline-offset: 2px; }
+.ai-settings small { display: block; color: #667085; font-size: 12px; margin-top: 6px; }
+.ai-settings label.ai-settings-clear { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-top: 10px; }
+.ai-settings button[type="submit"] { margin-top: 20px; }
+.ai-settings fieldset:disabled { opacity: .65; }
 .ai-open .board-toolbar { left: calc(50% - 200px); }
 .ai-panel {
   position: fixed;

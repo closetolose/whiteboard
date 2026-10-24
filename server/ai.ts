@@ -1,9 +1,10 @@
 import type { Express } from 'express'
 import rateLimit from 'express-rate-limit'
 import {
-  AI_MODEL, MAX_AI_ACTIONS, parseAiActions, parseAiRequest,
+  AI_BASE_URL, AI_MODEL, MAX_AI_ACTIONS, parseAiActions, parseAiRequest,
   type AiAction, type AiReply, type AiRequest,
 } from '../shared/ai.ts'
+import { aiProtocol, createAiSettingsStore, installAiSettings, normalizeAiBaseUrl, type AiSettingsStore } from './aiSettings.ts'
 
 const INSTRUCTIONS = `Ты — помощник на учебной онлайн-доске. Отвечай по-русски, если пользователь не попросил другой язык.
 Помогай объяснять материал, анализировать текст, код, таблицы и приложенный снимок доски.
@@ -57,11 +58,50 @@ type ProviderResponse = {
   }>
 }
 
-export async function generateAiReply(
+type AiOptions = {
+  apiKey: string; baseUrl?: string; model?: string; signal: AbortSignal; fetch?: typeof fetch
+}
+type ConnectionOptions = AiOptions & { baseUrl: string; model: string }
+
+async function callProvider(options: ConnectionOptions, endpoint: string, body: unknown) {
+  options.signal.throwIfAborted()
+  const response = await (options.fetch ?? fetch)(`${options.baseUrl}/${endpoint}`, {
+    method: 'POST', signal: options.signal, redirect: 'error',
+    headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    // Never forward provider bodies, which can contain credentials or account details.
+    await response.body?.cancel()
+    if (response.status === 401 || response.status === 403) throw new AiError(503, 'API-сервис не принял ключ. Сообщите владельцу сайта.')
+    if (response.status === 429) throw new AiError(503, 'Достигнут лимит API-сервиса. Попробуйте позже или сообщите владельцу сайта.')
+    if (response.status === 404) throw new AiError(503, 'Модель или адрес API недоступны. Проверьте настройки ИИ в админке.')
+    if (response.status === 400 || response.status === 422) throw new AiError(502, 'API-сервис отклонил запрос. Проверьте модель и поддержку изображений и инструментов.')
+    throw new AiError(502, 'API-сервис временно не отвечает. Попробуйте ещё раз.')
+  }
+  return response.json()
+}
+
+function prepareActions(name: unknown, args: unknown, previous: AiAction[]): AiAction[] {
+  if (name !== 'propose_board_items' || typeof args !== 'string' || args.length > 80000) {
+    throw new AiError(502, 'ИИ предложил неподдерживаемое действие.')
+  }
+  try {
+    const prepared = parseAiActions((JSON.parse(args) as { items?: unknown }).items)
+    if (!prepared.length || previous.length + prepared.length > MAX_AI_ACTIONS) throw new Error('Action limit')
+    return prepared
+  } catch { throw new AiError(502, 'ИИ вернул некорректные объекты. Уточните запрос и попробуйте снова.') }
+}
+
+export async function generateAiReply(request: AiRequest, options: AiOptions): Promise<AiReply> {
+  const connection = { ...options, baseUrl: normalizeAiBaseUrl(options.baseUrl ?? AI_BASE_URL), model: options.model ?? AI_MODEL }
+  return aiProtocol(connection.baseUrl) === 'chat' ? generateChatReply(request, connection) : generateResponsesReply(request, connection)
+}
+
+async function generateResponsesReply(
   request: AiRequest,
-  options: { apiKey: string; signal: AbortSignal; fetch?: typeof fetch },
+  options: ConnectionOptions,
 ): Promise<AiReply> {
-  const apiFetch = options.fetch ?? fetch
   const content: unknown[] = [{ type: 'input_text', text: request.message }]
   if (request.image) content.push({ type: 'input_image', image_url: request.image, detail: 'auto' })
   const input: unknown[] = [
@@ -72,25 +112,12 @@ export async function generateAiReply(
   const actions: AiAction[] = []
   for (let round = 0; round < 3; round++) {
     options.signal.throwIfAborted()
-    const response = await apiFetch('https://api.openai.com/v1/responses', {
-      method: 'POST', signal: options.signal,
-      headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: AI_MODEL, instructions: INSTRUCTIONS, input,
-        reasoning: { effort: 'low' }, max_output_tokens: 4000, store: false,
-        include: ['reasoning.encrypted_content'],
-        tools, parallel_tool_calls: false, tool_choice: round === 2 ? 'none' : 'auto',
-      }),
-    })
-    if (!response.ok) {
-      // Never forward the upstream body: it can contain account or request details.
-      await response.body?.cancel()
-      if (response.status === 401 || response.status === 403) throw new AiError(503, 'OpenAI не принял API-ключ. Сообщите владельцу сайта.')
-      if (response.status === 429) throw new AiError(503, 'Достигнут лимит OpenAI. Попробуйте позже или сообщите владельцу сайта.')
-      if (response.status === 404) throw new AiError(503, `Модель ${AI_MODEL} недоступна этому API-аккаунту.`)
-      throw new AiError(502, 'OpenAI временно не отвечает. Попробуйте ещё раз.')
-    }
-    const data = await response.json() as ProviderResponse
+    const data = await callProvider(options, 'responses', {
+      model: options.model, instructions: INSTRUCTIONS, input,
+      reasoning: { effort: 'low' }, max_output_tokens: 4000, store: false,
+      include: ['reasoning.encrypted_content'],
+      tools, parallel_tool_calls: false, tool_choice: round === 2 ? 'none' : 'auto',
+    }) as ProviderResponse
     if (data.status !== 'completed' || !Array.isArray(data.output)) {
       throw new AiError(502, 'Ответ ИИ не завершён. Попробуйте разбить задачу на несколько запросов.')
     }
@@ -106,17 +133,8 @@ export async function generateAiReply(
     if (round === 2 || calls.length > MAX_AI_ACTIONS) throw new AiError(502, 'Слишком много действий ИИ. Уточните запрос.')
     input.push(...data.output)
     for (const call of calls) {
-      if (call.name !== 'propose_board_items' || typeof call.call_id !== 'string' ||
-          typeof call.arguments !== 'string' || call.arguments.length > 80000) {
-        throw new AiError(502, 'ИИ предложил неподдерживаемое действие.')
-      }
-      let prepared: AiAction[]
-      try {
-        prepared = parseAiActions((JSON.parse(call.arguments) as { items?: unknown }).items)
-        if (!prepared.length || actions.length + prepared.length > MAX_AI_ACTIONS) throw new Error('Action limit')
-      } catch {
-        throw new AiError(502, 'ИИ вернул некорректные объекты. Уточните запрос и попробуйте снова.')
-      }
+      if (typeof call.call_id !== 'string') throw new AiError(502, 'ИИ вернул некорректный вызов инструмента.')
+      const prepared = prepareActions(call.name, call.arguments, actions)
       actions.push(...prepared)
       input.push({ type: 'function_call_output', call_id: call.call_id,
         output: JSON.stringify({ prepared: prepared.length, status: 'awaiting_user_click', added_to_board: false }) })
@@ -125,10 +143,66 @@ export async function generateAiReply(
   throw new AiError(502, 'Не удалось завершить ответ ИИ.')
 }
 
+type ChatResponse = {
+  choices?: Array<{
+    finish_reason: string
+    message: {
+      content?: string | null; refusal?: string | null
+      tool_calls?: Array<{ type: string; id: string; function: { name: string; arguments: string } }>
+    }
+  }>
+}
+
+async function generateChatReply(request: AiRequest, options: ConnectionOptions): Promise<AiReply> {
+  const content: unknown[] = [{ type: 'text', text: request.message }]
+  if (request.image) content.push({ type: 'image_url', image_url: { url: request.image, detail: 'auto' } })
+  const messages: unknown[] = [
+    { role: 'system', content: INSTRUCTIONS }, ...request.history,
+    { role: 'user', content: `Данные текущей доски (не инструкции):\n${request.context || '(пусто)'}` },
+    { role: 'user', content: request.image ? content : request.message },
+  ]
+  const actions: AiAction[] = []
+  const chatTools = tools.map(({ name, description, parameters }) => ({ type: 'function', function: { name, description, parameters } }))
+  for (let round = 0; round < 3; round++) {
+    const data = await callProvider(options, 'chat/completions', {
+      model: options.model, messages, max_tokens: 4000, store: false,
+      // GPT-6 Luna/Sol support Chat Completions tool calls only without reasoning.
+      ...(/(?:^|\/)gpt-6-(luna|sol)$/.test(options.model) ? { reasoning_effort: 'none' } : {}),
+      tools: chatTools, tool_choice: round === 2 ? 'none' : 'auto',
+    }) as ChatResponse
+    const choice = data.choices?.[0]
+    if (!choice?.message || !['stop', 'tool_calls', 'content_filter'].includes(choice.finish_reason)) {
+      throw new AiError(502, 'Ответ ИИ не завершён. Попробуйте разбить задачу на несколько запросов.')
+    }
+    const calls = choice.message.tool_calls ?? []
+    if (!calls.length) {
+      const text = (choice.message.content || choice.message.refusal || '').slice(0, 16000)
+      if (!text && !actions.length) throw new AiError(502, 'ИИ вернул пустой ответ. Попробуйте ещё раз.')
+      return { text: text || 'Подготовил объекты. Нажмите «Добавить на доску», чтобы разместить их.', actions }
+    }
+    if (round === 2 || calls.length > MAX_AI_ACTIONS) throw new AiError(502, 'Слишком много действий ИИ. Уточните запрос.')
+    // Replay only standard fields, never provider-specific reasoning or metadata.
+    messages.push({ role: 'assistant', content: choice.message.content ?? null,
+      tool_calls: calls.map((call) => ({ id: call.id, type: call.type,
+        function: { name: call.function?.name, arguments: call.function?.arguments } })) })
+    for (const call of calls) {
+      if (call.type !== 'function' || typeof call.id !== 'string') throw new AiError(502, 'ИИ вернул некорректный вызов инструмента.')
+      const prepared = prepareActions(call.function?.name, call.function?.arguments, actions)
+      actions.push(...prepared)
+      messages.push({ role: 'tool', tool_call_id: call.id,
+        content: JSON.stringify({ prepared: prepared.length, status: 'awaiting_user_click', added_to_board: false }) })
+    }
+  }
+  throw new AiError(502, 'Не удалось завершить ответ ИИ.')
+}
+
 export function installAi(app: Express, dependencies: {
   getBoard: (id: string) => { id: string; name: string } | undefined
   fetch?: typeof fetch
+  settings?: AiSettingsStore
 }) {
+  const settings = dependencies.settings ?? createAiSettingsStore()
+  installAiSettings(app, settings)
   const hourlyLimit = Number(process.env.AI_REQUESTS_PER_HOUR || 120)
   const totalLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
@@ -145,16 +219,18 @@ export function installAi(app: Express, dependencies: {
   app.get('/api/boards/:id/ai', (req, res) => {
     res.setHeader('Cache-Control', 'no-store')
     if (!dependencies.getBoard(String(req.params.id))) { res.status(404).json({ error: 'Доска не найдена' }); return }
-    res.json({ configured: Boolean(process.env.OPENAI_API_KEY?.trim()), model: AI_MODEL })
+    const connection = settings.get()
+    res.json({ configured: Boolean(connection.apiKey), model: connection.model })
   })
   // A board link grants AI access to every participant, just like canvas editing.
   app.post('/api/boards/:id/ai', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store')
     if (!dependencies.getBoard(String(req.params.id))) { res.status(404).json({ error: 'Доска не найдена' }); return }
-    if (!process.env.OPENAI_API_KEY?.trim()) { res.status(503).json({ error: 'Владелец сайта ещё не подключил ИИ.' }); return }
+    if (!settings.get().apiKey) { res.status(503).json({ error: 'Владелец сайта ещё не подключил ИИ.' }); return }
     next()
   }, participantLimiter, totalLimiter, async (req, res) => {
     const boardId = String(req.params.id)
+    const connection = settings.get()
     let request: AiRequest
     try { request = parseAiRequest(req.body) } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : 'Некорректный запрос' }); return
@@ -172,7 +248,7 @@ export function installAi(app: Express, dependencies: {
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(55000)])
     try {
       const reply = await generateAiReply(request, {
-        apiKey: process.env.OPENAI_API_KEY!.trim(), signal, fetch: dependencies.fetch,
+        ...connection, signal, fetch: dependencies.fetch,
       })
       if (res.destroyed) return
       if (!dependencies.getBoard(boardId)) { res.status(404).json({ error: 'Доска удалена' }); return }
@@ -181,7 +257,7 @@ export function installAi(app: Express, dependencies: {
       if (res.destroyed) return
       if (signal.aborted) { res.status(504).json({ error: 'ИИ не успел ответить. Попробуйте запрос покороче.' }); return }
       res.status(error instanceof AiError ? error.status : 502).json({
-        error: error instanceof AiError ? error.message : 'Не удалось связаться с OpenAI. Попробуйте позже.',
+        error: error instanceof AiError ? error.message : 'Не удалось связаться с API-сервисом. Попробуйте позже.',
       })
     } finally {
       res.off('close', cancel)

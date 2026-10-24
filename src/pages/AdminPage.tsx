@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AiSettingsForm } from '../components/AiSettingsForm'
 import {
   createBoard,
   deleteBoard,
@@ -96,8 +97,11 @@ export function AdminPage() {
         {error ? <p className="error-text">{error}</p> : null}
         <p className="muted" style={{ marginTop: 12 }}>
           <Link to="/">← На главную</Link>
+          {' · '}<a href="#ai-settings">Настройки ИИ</a>
         </p>
       </header>
+
+      <AiSettingsForm />
 
       <section className="board-list">
         <div className="section-head">

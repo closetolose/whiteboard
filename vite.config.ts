@@ -11,6 +11,11 @@ export default defineConfig({
     strictPort: true,
     // Allow ngrok / cloudflare tunnel hostnames
     allowedHosts: true,
+    fs: {
+      // Preserve Vite's secret-file deny list and include the saved API connection.
+      deny: ['.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}', '.npmrc', '.yarnrc.yml', '**/.git/**',
+        '**/data/ai-settings.json', '**/data/ai-settings.json.*.tmp'],
+    },
     proxy: {
       '/api': { target: API_TARGET, changeOrigin: false },
       '/uploads': { target: API_TARGET, changeOrigin: false },

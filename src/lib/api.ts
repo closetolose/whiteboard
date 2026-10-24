@@ -1,3 +1,5 @@
+import type { AiSettingsUpdate, AiSettingsView } from '../../shared/ai'
+
 export type BoardMeta = {
   id: string
   name: string
@@ -17,7 +19,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(text || `Request failed: ${response.status}`)
+    let message = text
+    try {
+      const result = JSON.parse(text)
+      if (typeof result.error === 'string') message = result.error
+    } catch { /* A proxy can return a non-JSON error. */ }
+    throw new Error(message || `Request failed: ${response.status}`)
   }
 
   if (response.status === 204) {
@@ -66,4 +73,11 @@ export function loginAdmin(password: string) {
 
 export function logoutAdmin() {
   return request<{ ok: true }>('/api/admin/logout', { method: 'POST' })
+}
+export function getAiSettings(signal?: AbortSignal) {
+  return request<AiSettingsView>('/api/admin/ai-settings', { cache: 'no-store', signal })
+}
+
+export function saveAiSettings(settings: AiSettingsUpdate) {
+  return request<AiSettingsView>('/api/admin/ai-settings', { method: 'PATCH', body: JSON.stringify(settings) })
 }

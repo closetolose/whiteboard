@@ -1,4 +1,5 @@
 export const AI_MODEL = 'gpt-6-luna'
+export const AI_BASE_URL = 'https://api.openai.com/v1'
 export const MAX_AI_MESSAGE = 4000
 export const MAX_AI_CONTEXT = 20000
 export const MAX_AI_HISTORY = 12
@@ -19,6 +20,18 @@ export type AiAction =
   | { type: 'table'; cells: string[][] }
 export type AiReply = { text: string; actions: AiAction[] }
 export type AiStatus = { configured: boolean; model: string }
+export type AiSettingsView = {
+  baseUrl: string
+  model: string
+  hasApiKey: boolean
+  protocol: 'responses' | 'chat'
+}
+export type AiSettingsUpdate = {
+  baseUrl: string
+  model: string
+  apiKey?: string
+  clearApiKey?: boolean
+}
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Ожидался объект')

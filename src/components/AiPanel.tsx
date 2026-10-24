@@ -109,7 +109,7 @@ export function AiPanel({ editor, boardId, open, onClose }: {
       if (event.key === 'Escape') onClose()
     }}>
       <header className="ai-header">
-        <div><strong>Помощник по доске</strong><small>{AI_MODEL}</small></div>
+        <div><strong>Помощник по доске</strong><small>{status?.model ?? AI_MODEL}</small></div>
         <button type="button" className="ai-close" aria-label="Закрыть помощника" onClick={onClose}>×</button>
       </header>
       <div className="ai-messages" role="log" aria-label="Переписка с помощником" aria-live="polite" aria-relevant="additions">
@@ -164,7 +164,7 @@ export function AiPanel({ editor, boardId, open, onClose }: {
           }}>Остановить</button>
             : <button key="send" type="submit" className="ai-primary" disabled={!draft.trim() || !editor || !status?.configured}>Отправить</button>}
         </div>
-        <p className="ai-privacy">Контекст и снимок передаются OpenAI. Переписка видна только вам и хранится до перезагрузки страницы. ИИ может ошибаться.</p>
+        <p className="ai-privacy">Контекст и снимок передаются выбранному API-сервису. Переписка видна только вам и хранится до перезагрузки страницы. ИИ может ошибаться.</p>
       </form>
     </aside>
   )
