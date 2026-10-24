@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Editor } from 'tldraw'
 import { AI_MODEL, MAX_AI_MESSAGE, type AiAction, type AiMessage, type AiStatus } from '../../shared/ai'
 import { addAiActions, askAi, collectAiContext, getAiStatus, trimAiHistory } from '../lib/ai'
+
+const AiMarkdown = lazy(async () => {
+  const [module] = await Promise.all([import('./AiMarkdown'), import('katex/dist/katex.min.css')])
+  return module
+})
 
 type ChatEntry = AiMessage & { id: number; actions?: AiAction[]; added?: boolean }
 type PendingRequest = { controller: AbortController; message: string; entryId: number; sent: boolean }
@@ -124,7 +129,9 @@ export function AiPanel({ editor, boardId, open, onClose }: {
         </div>}
         {messages.map((entry) => <article key={entry.id} className={`ai-message ai-message-${entry.role}`}>
           <strong>{entry.role === 'user' ? 'Вы' : 'Помощник'}</strong>
-          <div className="ai-message-text">{entry.content}</div>
+          {entry.role === 'assistant' ? <Suspense fallback={<div className="ai-message-text">{entry.content}</div>}>
+            <AiMarkdown content={entry.content} />
+          </Suspense> : <div className="ai-message-text">{entry.content}</div>}
           {entry.actions?.length ? <div className="ai-proposals">
             {entry.actions.map((action, index) => <details key={index}>
               <summary>{action.type === 'python' ? 'Python-блок' : action.type === 'table' ? 'Таблица' : 'Текст'}</summary>

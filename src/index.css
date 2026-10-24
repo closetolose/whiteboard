@@ -272,6 +272,50 @@ a {
 .ai-message > strong { display: block; font-size: 12px; color: #667085; margin-bottom: 6px; }
 .ai-message-user { background: #f4f6f8; padding: 12px; border-radius: 8px; }
 .ai-message-text { white-space: pre-wrap; line-height: 1.55; }
+.ai-markdown { font-size: 14px; line-height: 1.65; min-width: 0; }
+.ai-markdown > :first-child { margin-top: 0; }
+.ai-markdown > :last-child { margin-bottom: 0; }
+.ai-markdown p { margin: 0 0 12px; }
+.ai-markdown h1, .ai-markdown h2, .ai-markdown h3, .ai-markdown h4,
+.ai-markdown h5, .ai-markdown h6 { color: #1a1d23; font-weight: 650; line-height: 1.4; margin: 22px 0 10px; }
+.ai-markdown h1 { font-size: 21px; }
+.ai-markdown h2 { font-size: 18px; }
+.ai-markdown h3, .ai-markdown h4, .ai-markdown h5, .ai-markdown h6 { font-size: 16px; }
+.ai-markdown ul, .ai-markdown ol { padding-left: 22px; margin: 10px 0 14px; }
+.ai-markdown li { padding-left: 2px; margin: 5px 0; }
+.ai-markdown li > p { margin-bottom: 6px; }
+.ai-markdown li > ul, .ai-markdown li > ol { margin: 4px 0; }
+.ai-markdown strong { font-weight: 650; }
+.ai-markdown a { color: #1c5d99; text-decoration: underline; text-underline-offset: 3px; }
+.ai-markdown blockquote { color: #475467; border-left: 3px solid #dce1e8; padding-left: 12px; margin: 14px 0; }
+.ai-markdown blockquote > :last-child { margin-bottom: 0; }
+.ai-markdown hr { border: 0; border-top: 1px solid #e8ebef; margin: 20px 0; }
+.ai-markdown code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
+.ai-markdown :not(pre) > code { color: #344054; background: #f0f3f6; border-radius: 4px; padding: 2px 5px; }
+.ai-code-block { border: 1px solid #dce1e8; border-radius: 8px; overflow: hidden; margin: 14px 0; background: #f6f8fa; }
+.ai-code-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #eef1f5; padding: 6px 12px; color: #475467; font-size: 12px; }
+.ai-code-header button { border: 1px solid #c9d2de; border-radius: 4px; background: #fff; padding: 5px 8px; min-height: 28px; color: #344054; }
+.ai-code-header button:hover { background: #f8fafc; border-color: #98a2b3; }
+.ai-code-block pre { margin: 0; padding: 14px; max-height: 420px; overflow: auto; white-space: pre; overflow-wrap: normal; tab-size: 4; line-height: 1.65; }
+.ai-code-block pre:focus-visible, .ai-markdown-table:focus-visible { outline: 2px solid #1971c2; outline-offset: -2px; }
+.ai-code-block pre code { padding: 0; background: none; font-size: 12px; }
+.ai-code-block .hljs-keyword, .ai-code-block .hljs-selector-tag, .ai-code-block .hljs-literal { color: #8a1b81; }
+.ai-code-block .hljs-string, .ai-code-block .hljs-regexp { color: #0b645a; }
+.ai-code-block .hljs-number, .ai-code-block .hljs-symbol { color: #9a4a0a; }
+.ai-code-block .hljs-title, .ai-code-block .hljs-built_in { color: #135a9c; }
+.ai-code-block .hljs-comment { color: #667085; font-style: italic; }
+.ai-code-block .hljs-meta { color: #815000; }
+.ai-markdown-table { max-width: 100%; overflow: auto; margin: 14px 0; border: 1px solid #dce1e8; border-radius: 6px; }
+.ai-markdown table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.ai-markdown th, .ai-markdown td { padding: 8px 10px; border-right: 1px solid #e8ebef; border-bottom: 1px solid #e8ebef; min-width: 80px; text-align: left; }
+.ai-markdown th { background: #f0f3f6; font-weight: 600; }
+.ai-markdown th:last-child, .ai-markdown td:last-child { border-right: 0; }
+.ai-markdown tr:last-child td { border-bottom: 0; }
+.ai-markdown .katex { font-size: 1.08em; }
+.ai-markdown .katex-display { margin: 14px 0; padding: 6px 0; overflow-x: auto; overflow-y: hidden; }
+.ai-markdown .katex-display > .katex { text-align: left; }
+.ai-markdown .katex-error { color: #344054; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+.ai-image-label { color: #667085; font-style: italic; }
 .ai-proposals { margin-top: 12px; }
 .ai-proposals details { border: 1px solid #dce1e8; border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
 .ai-proposals summary { cursor: pointer; padding: 10px; font-weight: 600; }

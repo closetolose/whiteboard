@@ -6,6 +6,7 @@ import { installAi } from '../server/ai.ts'
 import { createAiSettingsStore } from '../server/aiSettings.ts'
 import { installAuth } from '../server/auth.ts'
 import { startTestServer, ROOT } from './server-helper.mjs'
+import { richAiReply } from './fixtures/ai-markdown.mjs'
 
 const backend = await startTestServer({ OPENAI_API_KEY: '' })
 const login = await fetch(`${backend.url}/api/admin/login`, {
@@ -40,6 +41,10 @@ installAi(mock, {
     if (prompt.includes('долгое ожидание')) {
       return new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }))
     }
+    if (prompt.includes('оформление')) {
+      return Response.json(chat ? { choices: [{ finish_reason: 'stop', message: { content: richAiReply } }] }
+        : { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: richAiReply }] }] })
+    }
     console.log(`AI mock: protocol=${chat ? 'chat' : 'responses'}, image=${Array.isArray(last.content) && last.content.some((item) => item.type === 'input_image' || item.type === 'image_url')}`)
     const args = JSON.stringify({ items: [
         { type: 'text', text: 'Цикл for повторяет действие для каждого элемента последовательности.' },
@@ -56,15 +61,16 @@ mock.use((error, _req, res, _next) => {
     .json({ error: error.message || 'Ошибка тестового API' })
 })
 let vite
+const port = Number(process.env.AI_BROWSER_PORT || 3079)
 try {
   vite = await createServer({
-    root: ROOT, server: { host: '127.0.0.1', port: 3079, strictPort: true },
+    root: ROOT, server: { host: '127.0.0.1', port, strictPort: true },
     plugins: [{ name: 'synthetic-ai-only', configureServer(server) { server.middlewares.use(mock) } }],
   })
   await vite.listen()
 } catch (error) { await vite?.close(); await backend.stop(); throw error }
-console.log(`AI browser test (synthetic): http://127.0.0.1:3079/board/${board.id}`)
-console.log('AI settings: http://127.0.0.1:3079/admin (password: local-audit-test)')
+console.log(`AI browser test (synthetic): http://127.0.0.1:${port}/board/${board.id}`)
+console.log(`AI settings: http://127.0.0.1:${port}/admin (password: local-audit-test)`)
 let stopping = false
 async function stop() {
   if (stopping) return
