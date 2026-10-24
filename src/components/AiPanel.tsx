@@ -12,7 +12,7 @@ export function AiPanel({ editor, boardId, open, onClose }: {
   const [messages, setMessages] = useState<ChatEntry[]>([])
   const [draft, setDraft] = useState('')
   const [scope, setScope] = useState<'page' | 'selection'>('page')
-  const [includeImage, setIncludeImage] = useState(true)
+  const [includeImage, setIncludeImage] = useState(false)
   const [status, setStatus] = useState<AiStatus | null>(null)
   const [statusError, setStatusError] = useState('')
   const [error, setError] = useState('')

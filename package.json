@@ -15,6 +15,7 @@
     "build": "tsc -b && vite build",
     "start": "tsx server/index.ts",
     "hash-password": "node scripts/hash-admin-password.mjs",
+    "ai:diagnose": "node --dns-result-order=ipv4first --no-network-family-autoselection --import tsx scripts/diagnose-ai.mjs",
     "reset-rooms": "node scripts/reset-rooms.mjs",
     "preview": "vite preview",
     "lint": "oxlint",

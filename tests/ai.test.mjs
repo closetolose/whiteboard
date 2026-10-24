@@ -49,6 +49,7 @@ test('Responses request uses exact model, bounded output and opt-out storage; pl
     assert.equal(body.store, false)
     assert.equal(body.include, undefined)
     assert.equal(body.stream, false)
+    assert.deepEqual(body.reasoning, { effort: 'none' })
     assert.equal(body.max_output_tokens, 4000)
     assert.equal(body.input.at(-1).content[1].type, 'input_image')
     assert.equal(body.tools[0].strict, true)
